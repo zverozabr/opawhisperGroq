@@ -1,5 +1,6 @@
 """CLI entry point."""
 
+import os
 import signal
 import subprocess
 import sys
@@ -7,7 +8,7 @@ import sys
 from . import __version__
 from .app import App
 from .config import Config
-from .lock import acquire_lock
+from .lock import acquire_lock, release_lock
 
 
 def check_dependencies() -> None:
@@ -44,7 +45,13 @@ def main() -> None:
     print(f"Model: {config.model}")
     print(f"Language: {config.language}")
 
-    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+    def handle_sigint(*_):
+        """Handle Ctrl+C gracefully with os._exit to avoid pynput thread issues."""
+        print("\nExiting...")
+        release_lock()
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, handle_sigint)
 
     App(config).run()
 
