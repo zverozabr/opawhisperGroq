@@ -1,6 +1,6 @@
 # SoupaWhisper
 
-Voice dictation tool for Linux (X11) using Groq Whisper API.
+Voice dictation tool for Linux/macOS using Groq Whisper API.
 
 ## Features
 
@@ -10,19 +10,35 @@ Voice dictation tool for Linux (X11) using Groq Whisper API.
 - Copies to clipboard
 - Desktop notifications
 - Single instance lock
-- Supports 100+ languages
+- Supports 100+ languages (auto-detect or specify)
+- Multi-platform: X11, Wayland, macOS
 
 ## Requirements
 
-- Arch Linux / X11
-- Python 3.11+
-- System: `alsa-utils`, `xclip`, `xdotool`
+### Linux (X11)
+```bash
+sudo pacman -S alsa-utils xclip xdotool  # Arch
+sudo apt install alsa-utils xclip xdotool  # Debian/Ubuntu
+```
+
+### Linux (Wayland)
+```bash
+sudo pacman -S alsa-utils wl-clipboard wtype  # Arch
+sudo apt install alsa-utils wl-clipboard wtype  # Debian/Ubuntu
+
+# For hotkey support (add user to input group)
+sudo usermod -aG input $USER
+# Re-login required
+```
+
+### macOS
+```bash
+brew install sox
+```
 
 ## Installation
 
 ```bash
-sudo pacman -S alsa-utils xclip xdotool
-
 cd ~/work/soupawhisper
 uv sync
 ```
@@ -35,14 +51,17 @@ uv sync
 [groq]
 api_key = YOUR_GROQ_API_KEY
 model = whisper-large-v3
-language = ru
+language = auto  # or "ru", "en", etc.
 
 [hotkey]
 key = ctrl_r
 
 [behavior]
 auto_type = true
+auto_enter = false
+typing_delay = 12  # ms between keystrokes (0 = fastest)
 notifications = true
+backend = auto  # auto, x11, wayland, darwin
 ```
 
 Get API key: https://console.groq.com/
@@ -56,19 +75,15 @@ uv run soupawhisper
 - Hold **Right Ctrl** — record
 - Release — transcribe & type
 
-## Structure
+## Platform Notes
 
-```
-src/soupawhisper/
-├── __init__.py      # Version
-├── __main__.py      # Entry point
-├── app.py           # Main logic
-├── audio.py         # ALSA recording
-├── config.py        # INI config
-├── lock.py          # Single instance
-├── output.py        # Clipboard/xdotool
-└── transcribe.py    # Groq API
-```
+| Platform | Clipboard | Typing | Hotkeys |
+|----------|-----------|--------|---------|
+| X11 | xclip | xdotool | pynput |
+| Wayland | wl-copy | wtype/ydotool | evdev |
+| macOS | pbcopy | pynput | pynput |
+
+**KDE Wayland:** Virtual keyboard blocked by security. Text copies to clipboard only — paste with Ctrl+V.
 
 ## License
 

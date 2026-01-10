@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 .venv/
+.pytest_cache/
 
 # Secrets
 config.ini

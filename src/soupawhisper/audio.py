@@ -1,12 +1,35 @@
 """Audio recording functionality."""
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 
+def _get_record_command(output_path: str) -> list[str]:
+    """Get platform-specific audio record command."""
+    if sys.platform == "darwin":
+        # macOS: use sox (install with `brew install sox`)
+        return [
+            "rec",
+            "-r", "16000",    # 16kHz sample rate
+            "-c", "1",        # Mono
+            "-b", "16",       # 16-bit
+            output_path,
+        ]
+    # Linux: use arecord (ALSA)
+    return [
+        "arecord",
+        "-f", "S16_LE",   # 16-bit little-endian
+        "-r", "16000",    # 16kHz sample rate
+        "-c", "1",        # Mono
+        "-t", "wav",
+        output_path,
+    ]
+
+
 class AudioRecorder:
-    """Records audio using ALSA arecord."""
+    """Records audio using platform-specific tools."""
 
     def __init__(self):
         self._process: subprocess.Popen | None = None
@@ -29,15 +52,9 @@ class AudioRecorder:
         temp.close()
         self._temp_file = Path(temp.name)
 
+        command = _get_record_command(str(self._temp_file))
         self._process = subprocess.Popen(
-            [
-                "arecord",
-                "-f", "S16_LE",  # 16-bit little-endian
-                "-r", "16000",   # 16kHz sample rate
-                "-c", "1",       # Mono
-                "-t", "wav",
-                str(self._temp_file),
-            ],
+            command,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

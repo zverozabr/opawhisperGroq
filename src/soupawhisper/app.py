@@ -1,31 +1,21 @@
 """Main application logic."""
 
 import sys
-from pynput import keyboard
 
 from .audio import AudioRecorder
+from .backend import DisplayBackend, create_backend
 from .config import Config
-from .output import copy_to_clipboard, notify, type_text
+from .output import notify
 from .transcribe import transcribe, TranscriptionError
-
-
-def get_hotkey(key_name: str) -> keyboard.Key | keyboard.KeyCode:
-    """Map key name string to pynput key."""
-    key_name = key_name.lower()
-    if hasattr(keyboard.Key, key_name):
-        return getattr(keyboard.Key, key_name)
-    if len(key_name) == 1:
-        return keyboard.KeyCode.from_char(key_name)
-    return keyboard.Key.f12
 
 
 class App:
     """Voice dictation application."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, backend: DisplayBackend | None = None):
         self.config = config
         self.recorder = AudioRecorder()
-        self.hotkey = get_hotkey(config.hotkey)
+        self.backend = backend or create_backend(config.backend, config.typing_delay)
 
         if not config.api_key:
             print("ERROR: Groq API key not configured!")
@@ -36,16 +26,16 @@ class App:
         if self.config.notifications:
             notify(title, message, icon, timeout)
 
-    def _on_press(self, key: keyboard.Key) -> None:
-        if key != self.hotkey or self.recorder.is_recording:
+    def _on_press(self) -> None:
+        if self.recorder.is_recording:
             return
 
         self.recorder.start()
         print("Recording...")
         self._notify("Recording...", "Release key when done", "audio-input-microphone", 30000)
 
-    def _on_release(self, key: keyboard.Key) -> None:
-        if key != self.hotkey or not self.recorder.is_recording:
+    def _on_release(self) -> None:
+        if not self.recorder.is_recording:
             return
 
         audio_path = self.recorder.stop()
@@ -64,9 +54,11 @@ class App:
             )
 
             if text:
-                copy_to_clipboard(text)
+                self.backend.copy_to_clipboard(text)
                 if self.config.auto_type:
-                    type_text(text)
+                    self.backend.type_text(text)
+                    if self.config.auto_enter:
+                        self.backend.press_key("enter")
                 print(f"Transcribed: {text}")
                 preview = text[:100] + ("..." if len(text) > 100 else "")
                 self._notify("Done!", preview, "emblem-ok-symbolic", 3000)
@@ -83,12 +75,11 @@ class App:
 
     def run(self) -> None:
         """Start the application."""
-        hotkey_name = self.hotkey.name if hasattr(self.hotkey, "name") else str(self.hotkey)
-        print(f"Ready! Hold [{hotkey_name}] to record.")
+        print(f"Ready! Hold [{self.config.hotkey}] to record.")
         print("Press Ctrl+C to quit.")
 
-        with keyboard.Listener(
-            on_press=self._on_press,
-            on_release=self._on_release,
-        ) as listener:
-            listener.join()
+        self.backend.listen_hotkey(
+            self.config.hotkey,
+            self._on_press,
+            self._on_release,
+        )

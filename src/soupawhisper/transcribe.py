@@ -17,7 +17,7 @@ def transcribe(audio_path: str, api_key: str, model: str, language: str) -> str:
         audio_path: Path to audio file (WAV format)
         api_key: Groq API key
         model: Whisper model name
-        language: Language code (e.g., "ru", "en")
+        language: Language code (e.g., "ru", "en") or "auto" for auto-detection
 
     Returns:
         Transcribed text
@@ -27,12 +27,16 @@ def transcribe(audio_path: str, api_key: str, model: str, language: str) -> str:
     """
     headers = {"Authorization": f"Bearer {api_key}"}
 
+    data = {"model": model}
+    if language != "auto":
+        data["language"] = language
+
     with open(audio_path, "rb") as f:
         response = requests.post(
             GROQ_API_URL,
             headers=headers,
             files={"file": ("audio.wav", f, "audio/wav")},
-            data={"model": model, "language": language},
+            data=data,
             timeout=30,
         )
 

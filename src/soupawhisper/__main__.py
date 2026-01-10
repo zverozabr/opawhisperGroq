@@ -7,17 +7,27 @@ import sys
 
 from . import __version__
 from .app import App
+from .backend import detect_backend_type
 from .config import Config
 from .lock import acquire_lock, release_lock
 
 
-def check_dependencies() -> None:
+def check_dependencies(backend_type: str) -> None:
     """Verify required system tools are installed."""
-    required = [
-        ("arecord", "alsa-utils"),
-        ("xclip", "xclip"),
-        ("xdotool", "xdotool"),
-    ]
+    if sys.platform == "darwin":
+        required = [("rec", "sox")]
+    elif backend_type == "wayland":
+        required = [
+            ("arecord", "alsa-utils"),
+            ("wl-copy", "wl-clipboard"),
+            ("ydotool", "ydotool"),
+        ]
+    else:  # x11
+        required = [
+            ("arecord", "alsa-utils"),
+            ("xclip", "xclip"),
+            ("xdotool", "xdotool"),
+        ]
 
     missing = [
         (cmd, pkg)
@@ -38,10 +48,13 @@ def main() -> None:
         print("SoupaWhisper is already running!")
         sys.exit(1)
 
-    print(f"SoupaWhisper v{__version__}")
-    check_dependencies()
-
     config = Config.load()
+    backend_type = config.backend if config.backend != "auto" else detect_backend_type()
+
+    print(f"SoupaWhisper v{__version__}")
+    print(f"Backend: {backend_type}")
+    check_dependencies(backend_type)
+
     print(f"Model: {config.model}")
     print(f"Language: {config.language}")
 
