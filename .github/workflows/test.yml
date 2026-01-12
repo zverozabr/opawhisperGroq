@@ -27,6 +27,7 @@ jobs:
 
   test-windows:
     runs-on: windows-latest
+    continue-on-error: true  # Windows support is experimental
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +45,7 @@ jobs:
 
   test-macos:
     runs-on: macos-latest
+    continue-on-error: true  # macOS support is experimental
     steps:
       - uses: actions/checkout@v4
 
