@@ -4,7 +4,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -54,7 +53,6 @@ class TestWaylandE2E:
     def test_evdev_keyboard_detection(self):
         """Test that keyboard devices can be found."""
         try:
-            import evdev
             from soupawhisper.backend.wayland import _find_keyboard_devices
 
             devices = _find_keyboard_devices()

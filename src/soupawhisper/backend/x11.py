@@ -3,17 +3,9 @@
 import subprocess
 from typing import Callable
 
-from pynput import keyboard
-
-
-def _get_pynput_key(key_name: str) -> keyboard.Key | keyboard.KeyCode:
-    """Map key name string to pynput key."""
-    key_name = key_name.lower()
-    if hasattr(keyboard.Key, key_name):
-        return getattr(keyboard.Key, key_name)
-    if len(key_name) == 1:
-        return keyboard.KeyCode.from_char(key_name)
-    return keyboard.Key.f12
+from ..clipboard import copy_to_clipboard as _copy
+from .base import TypingMethod
+from .pynput_listener import PynputHotkeyListener
 
 
 class X11Backend:
@@ -26,21 +18,27 @@ class X11Backend:
             typing_delay: Delay between keystrokes in ms (0 = fastest, 12 = default)
         """
         self.typing_delay = typing_delay
+        self._hotkey_listener = PynputHotkeyListener()
+
+    def stop(self) -> None:
+        """Signal the hotkey listener to stop."""
+        self._hotkey_listener.stop()
 
     def copy_to_clipboard(self, text: str) -> None:
-        """Copy text to system clipboard using xclip."""
-        process = subprocess.Popen(
-            ["xclip", "-selection", "clipboard"],
-            stdin=subprocess.PIPE,
-        )
-        process.communicate(input=text.encode())
+        """Copy text to system clipboard."""
+        _copy(text)
 
-    def type_text(self, text: str) -> None:
-        """Type text into active window using xdotool."""
+    def type_text(self, text: str) -> TypingMethod:
+        """Type text into active window using xdotool.
+
+        Returns:
+            TypingMethod.XDOTOOL
+        """
         subprocess.run(
-            ["xdotool", "type", "--delay", str(self.typing_delay), "--clearmodifiers", text],
+            ["xdotool", "type", "--delay", str(self.typing_delay), "--clearmodifiers", "--", text],
             check=False,
         )
+        return TypingMethod.XDOTOOL
 
     def press_key(self, key: str) -> None:
         """Press a single key using xdotool."""
@@ -64,24 +62,5 @@ class X11Backend:
         on_press: Callable[[], None],
         on_release: Callable[[], None],
     ) -> None:
-        """Listen for hotkey using pynput. Blocks until interrupted."""
-        hotkey = _get_pynput_key(key)
-        is_pressed = False
-
-        def handle_press(k: keyboard.Key) -> None:
-            nonlocal is_pressed
-            if k == hotkey and not is_pressed:
-                is_pressed = True
-                on_press()
-
-        def handle_release(k: keyboard.Key) -> None:
-            nonlocal is_pressed
-            if k == hotkey and is_pressed:
-                is_pressed = False
-                on_release()
-
-        with keyboard.Listener(
-            on_press=handle_press,
-            on_release=handle_release,
-        ) as listener:
-            listener.join()
+        """Listen for hotkey using pynput. Blocks until interrupted or stop() called."""
+        self._hotkey_listener.listen(key, on_press, on_release)

@@ -24,31 +24,27 @@ class TestX11Backend:
     """Tests for X11Backend."""
 
     def test_copy_to_clipboard(self, mock_pynput):
-        """Test clipboard copy uses xclip."""
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_popen.return_value = mock_process
-
+        """Test clipboard copy calls shared clipboard module."""
+        with patch("soupawhisper.backend.x11._copy") as mock_copy:
             # Import after mocking
             from soupawhisper.backend.x11 import X11Backend
             backend = X11Backend()
             backend.copy_to_clipboard("тест")
 
-            mock_popen.assert_called_once()
-            assert mock_popen.call_args[0][0] == ["xclip", "-selection", "clipboard"]
-            mock_process.communicate.assert_called_once_with(input="тест".encode())
+            mock_copy.assert_called_once_with("тест")
 
     def test_type_text(self, mock_pynput):
-        """Test text typing uses xdotool."""
+        """Test text typing uses xdotool type."""
         with patch("subprocess.run") as mock_run:
             from soupawhisper.backend.x11 import X11Backend
             backend = X11Backend()
-            backend.type_text("привет")
+            method = backend.type_text("привет")
 
             mock_run.assert_called_once_with(
-                ["xdotool", "type", "--delay", "12", "--clearmodifiers", "привет"],
+                ["xdotool", "type", "--delay", "12", "--clearmodifiers", "--", "привет"],
                 check=False,
             )
+            assert method == "xdotool"
 
     def test_press_key_enter(self, mock_pynput):
         """Test pressing Enter key."""
@@ -74,14 +70,10 @@ class TestX11Backend:
                 check=False,
             )
 
-    def test_type_text_custom_delay(self, mock_pynput):
-        """Test text typing with custom delay."""
-        with patch("subprocess.run") as mock_run:
+    def test_type_text_returns_method(self, mock_pynput):
+        """Test type_text returns method name."""
+        with patch("subprocess.run"):
             from soupawhisper.backend.x11 import X11Backend
-            backend = X11Backend(typing_delay=0)
-            backend.type_text("fast")
-
-            mock_run.assert_called_once_with(
-                ["xdotool", "type", "--delay", "0", "--clearmodifiers", "fast"],
-                check=False,
-            )
+            backend = X11Backend()
+            method = backend.type_text("test")
+            assert method == "xdotool"

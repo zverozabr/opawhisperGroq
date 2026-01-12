@@ -31,29 +31,27 @@ class TestDarwinBackend:
     """Tests for DarwinBackend."""
 
     def test_copy_to_clipboard(self, mock_pynput):
-        """Test clipboard copy uses pbcopy."""
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_popen.return_value = mock_process
-
+        """Test clipboard copy calls shared clipboard module."""
+        with patch("soupawhisper.backend.darwin._copy") as mock_copy:
             from soupawhisper.backend.darwin import DarwinBackend
             backend = DarwinBackend()
             backend.copy_to_clipboard("тест")
 
-            mock_popen.assert_called_once()
-            assert mock_popen.call_args[0][0] == ["pbcopy"]
-            mock_process.communicate.assert_called_once_with(input="тест".encode())
+            mock_copy.assert_called_once_with("тест")
 
     def test_type_text(self, mock_pynput):
-        """Test text typing uses pynput controller."""
+        """Test text typing uses pynput controller with per-char typing."""
         mock_controller = MagicMock()
 
         with patch("soupawhisper.backend.darwin.keyboard.Controller", return_value=mock_controller):
             from soupawhisper.backend.darwin import DarwinBackend
-            backend = DarwinBackend()
-            backend.type_text("hello")
+            # Use 0 typing_delay to skip time.sleep
+            backend = DarwinBackend(typing_delay=0)
+            method = backend.type_text("hi")
 
-            mock_controller.type.assert_called_once_with("hello")
+            # Types char by char
+            assert mock_controller.type.call_count == 2
+            assert method == "pynput"
 
     def test_press_key_enter(self, mock_pynput):
         """Test pressing Enter key."""

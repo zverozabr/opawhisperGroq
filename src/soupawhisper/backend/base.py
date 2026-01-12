@@ -1,6 +1,18 @@
 """Display backend protocol - abstraction for X11/Wayland."""
 
-from typing import Protocol, Callable
+from enum import Enum
+from typing import Callable, Protocol
+
+
+class TypingMethod(str, Enum):
+    """Method used for typing text into windows."""
+
+    XDOTOOL = "xdotool"
+    WTYPE = "wtype"
+    YDOTOOL = "ydotool"
+    PYNPUT = "pynput"
+    CLIPBOARD = "clipboard"  # Manual paste required
+    NONE = "none"
 
 
 class DisplayBackend(Protocol):
@@ -10,8 +22,12 @@ class DisplayBackend(Protocol):
         """Copy text to system clipboard."""
         ...
 
-    def type_text(self, text: str) -> None:
-        """Type text into active window."""
+    def type_text(self, text: str) -> TypingMethod:
+        """Type text into active window.
+
+        Returns:
+            TypingMethod enum value indicating how text was typed
+        """
         ...
 
     def press_key(self, key: str) -> None:
@@ -25,4 +41,8 @@ class DisplayBackend(Protocol):
         on_release: Callable[[], None],
     ) -> None:
         """Listen for hotkey press/release events. Blocks until interrupted."""
+        ...
+
+    def stop(self) -> None:
+        """Signal the hotkey listener to stop."""
         ...

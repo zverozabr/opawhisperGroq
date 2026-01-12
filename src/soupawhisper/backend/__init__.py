@@ -3,15 +3,17 @@
 import os
 import sys
 
-from .base import DisplayBackend
+from .base import DisplayBackend, TypingMethod
 
-__all__ = ["DisplayBackend", "create_backend", "detect_backend_type"]
+__all__ = ["DisplayBackend", "TypingMethod", "create_backend", "detect_backend_type"]
 
 
 def detect_backend_type() -> str:
     """Detect the appropriate backend type for current platform."""
     if sys.platform == "darwin":
         return "darwin"
+    if sys.platform == "win32":
+        return "windows"
     if sys.platform == "linux":
         if os.environ.get("WAYLAND_DISPLAY"):
             return "wayland"
@@ -23,8 +25,8 @@ def create_backend(backend_type: str = "auto", typing_delay: int = 12) -> Displa
     """Create a display backend instance.
 
     Args:
-        backend_type: One of "auto", "x11", "wayland", "darwin"
-        typing_delay: Delay between keystrokes in ms (X11 only)
+        backend_type: One of "auto", "x11", "wayland", "darwin", "windows"
+        typing_delay: Delay between keystrokes in ms
 
     Returns:
         DisplayBackend instance
@@ -40,6 +42,9 @@ def create_backend(backend_type: str = "auto", typing_delay: int = 12) -> Displa
         return WaylandBackend()
     if backend_type == "darwin":
         from .darwin import DarwinBackend
-        return DarwinBackend()
+        return DarwinBackend(typing_delay=typing_delay)
+    if backend_type == "windows":
+        from .windows import WindowsBackend
+        return WindowsBackend(typing_delay=typing_delay)
 
     raise ValueError(f"Unknown backend type: {backend_type}")

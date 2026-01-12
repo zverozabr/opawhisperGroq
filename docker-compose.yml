@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Linux testing container
+  test-linux:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.linux
+    environment:
+      - DISPLAY=:99
+      - PULSE_SERVER=unix:/run/pulse/native
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+
+  # Quick syntax check (no GUI dependencies)
+  lint:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - .:/app:ro
+    command: >
+      sh -c "
+        pip install ruff --quiet &&
+        ruff check src/ tests/
+      "

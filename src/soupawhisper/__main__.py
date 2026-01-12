@@ -1,5 +1,6 @@
 """CLI entry point."""
 
+import argparse
 import os
 import signal
 import subprocess
@@ -10,63 +11,141 @@ from .app import App
 from .backend import detect_backend_type
 from .config import Config
 from .lock import acquire_lock, release_lock
+from .logging import get_logger, setup_logging
+
+log = get_logger()
 
 
 def check_dependencies(backend_type: str) -> None:
     """Verify required system tools are installed."""
     if sys.platform == "darwin":
-        required = [("rec", "sox")]
+        required = [("rec", "brew install sox")]
+    elif sys.platform == "win32":
+        required = [("ffmpeg", "winget install ffmpeg")]
     elif backend_type == "wayland":
         required = [
-            ("arecord", "alsa-utils"),
-            ("wl-copy", "wl-clipboard"),
-            ("ydotool", "ydotool"),
+            ("arecord", "sudo pacman -S alsa-utils"),
+            ("wl-copy", "sudo pacman -S wl-clipboard"),
+            ("ydotool", "sudo pacman -S ydotool"),
         ]
     else:  # x11
         required = [
-            ("arecord", "alsa-utils"),
-            ("xclip", "xclip"),
-            ("xdotool", "xdotool"),
+            ("arecord", "sudo pacman -S alsa-utils"),
+            ("xclip", "sudo pacman -S xclip"),
+            ("xdotool", "sudo pacman -S xdotool"),
         ]
 
-    missing = [
-        (cmd, pkg)
-        for cmd, pkg in required
-        if subprocess.run(["which", cmd], capture_output=True).returncode != 0
-    ]
+    # Check command existence
+    if sys.platform == "win32":
+        check_cmd = ["where"]
+    else:
+        check_cmd = ["which"]
+
+    missing = []
+    for cmd, install_hint in required:
+        result = subprocess.run(
+            [*check_cmd, cmd],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            missing.append((cmd, install_hint))
 
     if missing:
-        print("Missing dependencies:")
-        for cmd, pkg in missing:
-            print(f"  {cmd} - install: sudo pacman -S {pkg}")
+        log.error("Missing dependencies:")
+        for cmd, install_hint in missing:
+            log.error(f"  {cmd} - install: {install_hint}")
         sys.exit(1)
+
+
+def has_display() -> bool:
+    """Check if display is available."""
+    return bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or sys.platform == "darwin"
+    )
+
+
+def run_cli(config: Config) -> None:
+    """Run in headless CLI mode."""
+    backend_type = config.backend if config.backend != "auto" else detect_backend_type()
+
+    log.info(f"SoupaWhisper v{__version__}")
+    log.info(f"Backend: {backend_type}")
+    check_dependencies(backend_type)
+
+    log.info(f"Model: {config.model}")
+    log.info(f"Language: {config.language}")
+
+    app = App(config)
+
+    def handle_sigint(*_):
+        """Handle Ctrl+C gracefully by stopping the app."""
+        log.info("Exiting...")
+        app.stop()
+
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    app.run()
+
+
+def run_gui() -> None:
+    """Run in GUI mode."""
+    from .gui import run_gui as gui_main
+
+    gui_main()
 
 
 def main() -> None:
     """Main entry point."""
-    if not acquire_lock():
-        print("SoupaWhisper is already running!")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Voice dictation tool using Groq Whisper API"
+    )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Run with graphical user interface",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run without GUI (CLI mode)",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"SoupaWhisper v{__version__}",
+    )
+    args = parser.parse_args()
+
+    acquire_lock()  # Kills existing instance if any
 
     config = Config.load()
-    backend_type = config.backend if config.backend != "auto" else detect_backend_type()
+    setup_logging(debug=config.debug)
 
-    print(f"SoupaWhisper v{__version__}")
-    print(f"Backend: {backend_type}")
-    check_dependencies(backend_type)
+    # Validate config
+    errors = config.validate()
+    if errors:
+        log.warning("Configuration warnings:")
+        for error in errors:
+            log.warning(f"  - {error}")
 
-    print(f"Model: {config.model}")
-    print(f"Language: {config.language}")
+    # Determine mode: GUI or CLI
+    if args.gui:
+        use_gui = True
+    elif args.headless:
+        use_gui = False
+    else:
+        # Auto-detect: use GUI if display available
+        use_gui = has_display()
 
-    def handle_sigint(*_):
-        """Handle Ctrl+C gracefully with os._exit to avoid pynput thread issues."""
-        print("\nExiting...")
+    try:
+        if use_gui:
+            run_gui()
+        else:
+            run_cli(config)
+    finally:
         release_lock()
-        os._exit(0)
-
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    App(config).run()
 
 
 if __name__ == "__main__":

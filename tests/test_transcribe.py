@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soupawhisper.transcribe import transcribe, TranscriptionError
+from soupawhisper.transcribe import TranscriptionError, TranscriptionResult, transcribe
 
 
 class TestTranscribe:
@@ -25,7 +25,9 @@ class TestTranscribe:
 
             result = transcribe(audio_path, "test-key", "whisper-large-v3", "ru")
 
-            assert result == "привет мир"
+            assert isinstance(result, TranscriptionResult)
+            assert result.text == "привет мир"
+            assert result.raw_response == {"text": "привет мир"}
             call_kwargs = mock_post.call_args[1]
             assert call_kwargs["data"]["language"] == "ru"
             assert call_kwargs["data"]["model"] == "whisper-large-v3"
@@ -44,7 +46,8 @@ class TestTranscribe:
 
             result = transcribe(audio_path, "test-key", "whisper-large-v3", "auto")
 
-            assert result == "hello world"
+            assert isinstance(result, TranscriptionResult)
+            assert result.text == "hello world"
             call_kwargs = mock_post.call_args[1]
             assert "language" not in call_kwargs["data"]
 
@@ -77,4 +80,5 @@ class TestTranscribe:
                 audio_path = f.name
 
             result = transcribe(audio_path, "test-key", "whisper-large-v3", "ru")
-            assert result == ""
+            assert isinstance(result, TranscriptionResult)
+            assert result.text == ""

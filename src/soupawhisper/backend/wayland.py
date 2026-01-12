@@ -2,10 +2,13 @@
 
 import shutil
 import subprocess
+import threading
 from typing import Callable
 
 import evdev
 from evdev import ecodes
+
+from .base import TypingMethod
 
 # Map common key names to evdev codes
 KEY_MAP = {
@@ -112,52 +115,58 @@ class WaylandBackend:
     """Wayland backend with smart fallbacks: wtype → ydotool → clipboard."""
 
     def __init__(self):
-        self._typing_method: str | None = None
+        self._typing_method: TypingMethod | None = None
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        """Signal the hotkey listener to stop."""
+        self._stop_event.set()
 
     def copy_to_clipboard(self, text: str) -> None:
-        """Copy text to system clipboard using wl-copy."""
-        process = subprocess.Popen(
-            ["wl-copy"],
-            stdin=subprocess.PIPE,
-        )
-        process.communicate(input=text.encode())
+        """Copy text to system clipboard."""
+        from ..clipboard import copy_to_clipboard
+        copy_to_clipboard(text)
 
-    def type_text(self, text: str) -> None:
+    def type_text(self, text: str) -> TypingMethod:
         """Type text with smart fallbacks.
 
         Strategy (like Voxtype):
         1. Try wtype (best Unicode/CJK support)
         2. Try ydotool Ctrl+V (text already in clipboard)
         3. Fall back to clipboard only (user pastes manually)
+
+        Returns:
+            TypingMethod enum value
         """
         # If we already know what works, use it
-        if self._typing_method == "wtype":
+        if self._typing_method == TypingMethod.WTYPE:
             if _try_wtype(text):
-                return
+                return TypingMethod.WTYPE
             self._typing_method = None  # Reset, try again
 
-        if self._typing_method == "ydotool":
+        if self._typing_method == TypingMethod.YDOTOOL:
             if _try_ydotool_paste():
-                return
+                return TypingMethod.YDOTOOL
             self._typing_method = None
 
-        if self._typing_method == "clipboard":
-            return  # Just clipboard, already copied
+        if self._typing_method == TypingMethod.CLIPBOARD:
+            return TypingMethod.CLIPBOARD  # Just clipboard, already copied
 
         # First run: discover what works
         if _try_wtype(text):
-            self._typing_method = "wtype"
+            self._typing_method = TypingMethod.WTYPE
             print("[backend] Using wtype for typing")
-            return
+            return TypingMethod.WTYPE
 
         if _try_ydotool_paste():
-            self._typing_method = "ydotool"
+            self._typing_method = TypingMethod.YDOTOOL
             print("[backend] Using ydotool (Ctrl+V) for typing")
-            return
+            return TypingMethod.YDOTOOL
 
         # Nothing works, just use clipboard
-        self._typing_method = "clipboard"
+        self._typing_method = TypingMethod.CLIPBOARD
         print("[backend] Typing unavailable, use Ctrl+V to paste")
+        return TypingMethod.CLIPBOARD
 
     def press_key(self, key: str) -> None:
         """Press a single key using ydotool."""
@@ -181,7 +190,9 @@ class WaylandBackend:
         on_press: Callable[[], None],
         on_release: Callable[[], None],
     ) -> None:
-        """Listen for hotkey using evdev. Blocks until interrupted."""
+        """Listen for hotkey using evdev. Blocks until interrupted or stop() called."""
+        self._stop_event.clear()
+
         target_code = _get_evdev_keycode(key)
         devices = _find_keyboard_devices()
 
@@ -200,8 +211,9 @@ class WaylandBackend:
             for device in devices:
                 selector.register(device, EVENT_READ)
 
-            while True:
-                for key_sel, _ in selector.select():
+            while not self._stop_event.is_set():
+                ready = selector.select(timeout=0.1)
+                for key_sel, _ in ready:
                     device = key_sel.fileobj
                     for event in device.read():
                         if event.type != ecodes.EV_KEY:

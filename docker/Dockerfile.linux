@@ -1,0 +1,28 @@
+# Linux testing container
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    alsa-utils \
+    xclip \
+    xdotool \
+    pulseaudio \
+    libgtk-3-0 \
+    libnotify-bin \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy project files
+COPY pyproject.toml uv.lock ./
+COPY src/ ./src/
+COPY tests/ ./tests/
+
+# Install dependencies
+RUN uv sync --frozen
+
+# Run tests
+CMD ["uv", "run", "pytest", "-v", "--ignore=tests/test_playwright_e2e.py", "--ignore=tests/test_gui_e2e.py"]

@@ -1,5 +1,8 @@
 """Speech-to-text transcription via Groq API."""
 
+from dataclasses import dataclass
+from typing import Any
+
 import requests
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -9,7 +12,15 @@ class TranscriptionError(Exception):
     """Raised when transcription fails."""
 
 
-def transcribe(audio_path: str, api_key: str, model: str, language: str) -> str:
+@dataclass
+class TranscriptionResult:
+    """Result from transcription API."""
+
+    text: str
+    raw_response: dict[str, Any]
+
+
+def transcribe(audio_path: str, api_key: str, model: str, language: str) -> TranscriptionResult:
     """
     Transcribe audio file using Groq Whisper API.
 
@@ -20,7 +31,7 @@ def transcribe(audio_path: str, api_key: str, model: str, language: str) -> str:
         language: Language code (e.g., "ru", "en") or "auto" for auto-detection
 
     Returns:
-        Transcribed text
+        TranscriptionResult with text and raw API response
 
     Raises:
         TranscriptionError: If API call fails
@@ -43,4 +54,8 @@ def transcribe(audio_path: str, api_key: str, model: str, language: str) -> str:
     if not response.ok:
         raise TranscriptionError(f"API error {response.status_code}: {response.text}")
 
-    return response.json().get("text", "").strip()
+    response_json = response.json()
+    return TranscriptionResult(
+        text=response_json.get("text", "").strip(),
+        raw_response=response_json,
+    )
