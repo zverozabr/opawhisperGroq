@@ -68,10 +68,8 @@ class GUIApp:
         self.page.theme_mode = ft.ThemeMode.DARK
         self.page.padding = 0
 
-        # Set window icon for taskbar
-        icon_path = Path(__file__).parent / "assets" / "microphone.png"
-        if icon_path.exists():
-            self.page.window.icon = str(icon_path)
+        # Set window icon for taskbar (relative to assets_dir set in ft.run)
+        self.page.window.icon = "microphone.png"
 
         # Handle cleanup when window closes
         self.page.on_disconnect = self._on_disconnect
@@ -327,4 +325,5 @@ class GUIApp:
 def run_gui() -> None:
     """Run the GUI application."""
     app = GUIApp()
-    ft.run(main=app.main)
+    assets_dir = Path(__file__).parent / "assets"
+    ft.run(main=app.main, assets_dir=str(assets_dir))
