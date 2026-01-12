@@ -1,6 +1,5 @@
 """Tests for virtual keyboard component."""
 
-import pytest
 
 
 class TestVirtualKeyboard:

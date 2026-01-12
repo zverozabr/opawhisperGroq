@@ -1,7 +1,5 @@
 """Integration tests for hotkey mappings."""
 
-import pytest
-from pynput import keyboard
 
 
 class TestKeyMappingConsistency:

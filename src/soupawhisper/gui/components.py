@@ -302,7 +302,6 @@ class VirtualKeyboard(ft.Column):
             row_controls = []
             for key_name, display, width_mult in row:
                 is_letter = key_name in LETTER_KEYS
-                is_modifier = key_name in MODIFIER_KEYS
                 is_selected = self._is_selected(key_name)
 
                 # Calculate font size based on text length and button width

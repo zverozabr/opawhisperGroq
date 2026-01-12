@@ -1,7 +1,5 @@
 """E2E tests for transcription flow using real debug recordings."""
 
-import json
-import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch

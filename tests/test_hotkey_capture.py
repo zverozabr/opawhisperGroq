@@ -1,6 +1,5 @@
 """Tests for hotkey functionality."""
 
-import pytest
 from pynput import keyboard
 
 from soupawhisper.config import Config
