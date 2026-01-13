@@ -4,67 +4,6 @@ from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 
-class TestTrayIcon:
-    """Tests for TrayIcon class."""
-
-    def test_load_icon_ready(self):
-        """Test loading ready icon."""
-        from soupawhisper.gui.tray import load_icon
-        img = load_icon("ready")
-        assert img.size == (48, 48)
-        assert img.mode == "RGBA"
-
-    def test_load_icon_recording(self):
-        """Test loading recording icon."""
-        from soupawhisper.gui.tray import load_icon
-        img = load_icon("recording")
-        assert img.size == (48, 48)
-
-    def test_load_icon_transcribing(self):
-        """Test loading transcribing icon."""
-        from soupawhisper.gui.tray import load_icon
-        img = load_icon("transcribing")
-        assert img.size == (48, 48)
-
-    def test_load_icon_fallback(self):
-        """Test fallback icon for unknown status."""
-        from soupawhisper.gui.tray import load_icon
-        img = load_icon("unknown")
-        assert img.size == (48, 48)
-
-    def test_tray_icon_init(self):
-        """Test TrayIcon initialization."""
-        from soupawhisper.gui.tray import TrayIcon
-        on_show = MagicMock()
-        on_quit = MagicMock()
-        tray = TrayIcon(on_show, on_quit)
-        assert tray.on_show == on_show
-        assert tray.on_quit == on_quit
-        assert tray._status == "ready"
-
-    def test_tray_icon_available_property(self):
-        """Test available property."""
-        from soupawhisper.gui.tray import TrayIcon
-        tray = TrayIcon(MagicMock(), MagicMock())
-        # Should return bool
-        assert isinstance(tray.available, bool)
-
-    def test_tray_set_status_without_icon(self):
-        """Test set_status when icon not started."""
-        from soupawhisper.gui.tray import TrayIcon
-        tray = TrayIcon(MagicMock(), MagicMock())
-        # Should not raise
-        tray.set_status("recording")
-        assert tray._status == "recording"
-
-    def test_tray_stop_without_start(self):
-        """Test stop when never started."""
-        from soupawhisper.gui.tray import TrayIcon
-        tray = TrayIcon(MagicMock(), MagicMock())
-        # Should not raise
-        tray.stop()
-
-
 class TestHistoryTab:
     """Tests for HistoryTab component."""
 
@@ -145,7 +84,7 @@ class TestGUIApp:
         assert app.config is not None
         assert app.history is not None
         assert app.core is None
-        assert app.tray is None
+        # Note: tray was removed (KISS principle)
         assert app.page is None
 
     def test_gui_app_copy_to_clipboard(self):
@@ -184,24 +123,26 @@ class TestAssets:
 
     def test_assets_directory_exists(self):
         """Test assets directory exists."""
-        from soupawhisper.gui.tray import ASSETS_DIR
-        assert ASSETS_DIR.exists()
-        assert ASSETS_DIR.is_dir()
+        assets_dir = Path("src/soupawhisper/gui/assets")
+        assert assets_dir.exists()
+        assert assets_dir.is_dir()
 
     def test_icon_files_exist(self):
         """Test icon files exist."""
-        from soupawhisper.gui.tray import ICON_PATHS
-        for status, path in ICON_PATHS.items():
-            assert path.exists(), f"Icon for {status} not found: {path}"
+        assets_dir = Path("src/soupawhisper/gui/assets")
+        required_icons = ["microphone.png", "microphone-recording.png", "microphone-processing.png"]
+        for icon_name in required_icons:
+            path = assets_dir / icon_name
+            assert path.exists(), f"Icon not found: {path}"
 
     def test_icon_files_are_valid_images(self):
         """Test icon files are valid PNG images."""
-        from soupawhisper.gui.tray import ICON_PATHS
         from PIL import Image
-
-        for status, path in ICON_PATHS.items():
+        assets_dir = Path("src/soupawhisper/gui/assets")
+        for icon_name in ["microphone.png", "microphone-recording.png", "microphone-processing.png"]:
+            path = assets_dir / icon_name
             img = Image.open(path)
-            assert img.format == "PNG", f"Icon for {status} is not PNG"
+            assert img.format == "PNG", f"Icon {icon_name} is not PNG"
             assert img.size[0] > 0 and img.size[1] > 0
 
 

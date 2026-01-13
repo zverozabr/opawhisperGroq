@@ -14,6 +14,8 @@ from typing import Any, Callable, Optional
 
 import flet as ft
 
+from .base import get_page_safe, safe_update
+
 # Re-export hotkey components for backwards compatibility
 from .hotkey import (
     HOTKEY_DISPLAY_NAMES,
@@ -122,11 +124,8 @@ class EditableField(ft.Row):
 
     def _safe_update(self, control: ft.Control) -> None:
         """Safely update a control."""
-        try:
-            if self.page:
-                control.update()
-        except RuntimeError:
-            pass
+        page = get_page_safe(self)
+        safe_update(page, control)
 
     @property
     def value(self) -> Any:

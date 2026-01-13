@@ -7,6 +7,7 @@ import flet as ft
 from soupawhisper.audio import AudioRecorder
 from soupawhisper.config import Config
 
+from .base import show_snack_on_control
 from .components import EditableField, HotkeySelector, SettingsSection
 
 
@@ -20,6 +21,22 @@ LANGUAGES = [
     ("es", "Spanish"),
     ("zh", "Chinese"),
     ("ja", "Japanese"),
+]
+
+# Whisper model options
+MODELS = [
+    ("whisper-large-v3", "Whisper Large V3 (best)"),
+    ("whisper-large-v3-turbo", "Whisper Large V3 Turbo (fast)"),
+    ("distil-whisper-large-v3-en", "Distil Whisper (English only)"),
+]
+
+# Backend options
+BACKENDS = [
+    ("auto", "Auto-detect"),
+    ("x11", "X11"),
+    ("wayland", "Wayland"),
+    ("darwin", "macOS"),
+    ("windows", "Windows"),
 ]
 
 
@@ -54,6 +71,18 @@ class SettingsTab(ft.Column):
             field=api_key_field,
             initial_value=self.config.api_key,
             on_save=lambda v: self._save_field("api_key", v),
+        )
+
+        # Model dropdown
+        model_dropdown = ft.Dropdown(
+            label="Whisper Model",
+            value=self.config.model,
+            options=[ft.dropdown.Option(key=k, text=v) for k, v in MODELS],
+        )
+        self.model_editable = EditableField(
+            field=model_dropdown,
+            initial_value=self.config.model,
+            on_save=lambda v: self._save_field("model", v),
         )
 
         # Language dropdown
@@ -146,6 +175,29 @@ class SettingsTab(ft.Column):
             on_save=lambda v: self._save_field("history_days", max(1, self._parse_int(v, 3))),
         )
 
+        # Notifications switch
+        notifications_switch = ft.Switch(
+            label="Show notifications",
+            value=self.config.notifications,
+        )
+        self.notifications_editable = EditableField(
+            field=notifications_switch,
+            initial_value=self.config.notifications,
+            on_save=lambda v: self._save_field("notifications", v),
+        )
+
+        # Backend dropdown
+        backend_dropdown = ft.Dropdown(
+            label="Display Backend",
+            value=self.config.backend,
+            options=[ft.dropdown.Option(key=k, text=v) for k, v in BACKENDS],
+        )
+        self.backend_editable = EditableField(
+            field=backend_dropdown,
+            initial_value=self.config.backend,
+            on_save=lambda v: self._save_field("backend", v),
+        )
+
         # Debug switch
         debug_switch = ft.Switch(
             label="Debug mode",
@@ -162,7 +214,10 @@ class SettingsTab(ft.Column):
             ft.Container(
                 content=ft.Column(
                     [
-                        SettingsSection("API", [self.api_key_editable]),
+                        SettingsSection("API", [
+                            self.api_key_editable,
+                            self.model_editable,
+                        ]),
                         ft.Divider(),
                         SettingsSection("Recognition", [
                             self.language_editable,
@@ -180,6 +235,11 @@ class SettingsTab(ft.Column):
                         SettingsSection("History", [
                             self.history_enabled_editable,
                             self.history_days_editable,
+                        ]),
+                        ft.Divider(),
+                        SettingsSection("System", [
+                            self.notifications_editable,
+                            self.backend_editable,
                         ]),
                         ft.Divider(),
                         SettingsSection("Developer", [self.debug_editable]),
@@ -221,16 +281,7 @@ class SettingsTab(ft.Column):
 
     def _show_saved_notification(self, field_name: str) -> None:
         """Show brief save confirmation."""
-        try:
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Saved"),
-                    duration=1000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-        except RuntimeError:
-            pass
+        show_snack_on_control(self, "Saved")
 
     def update_config(self, new_config: Config) -> None:
         """Update all fields from new config (e.g., after external change)."""
@@ -238,6 +289,7 @@ class SettingsTab(ft.Column):
         # Reset all editable fields
         if hasattr(self, "api_key_editable"):
             self.api_key_editable.reset(new_config.api_key)
+            self.model_editable.reset(new_config.model)
             self.language_editable.reset(new_config.language)
             self.hotkey_selector.reset(new_config.hotkey)
             self.device_editable.reset(new_config.audio_device)
@@ -246,4 +298,6 @@ class SettingsTab(ft.Column):
             self.typing_delay_editable.reset(str(new_config.typing_delay))
             self.history_enabled_editable.reset(new_config.history_enabled)
             self.history_days_editable.reset(str(new_config.history_days))
+            self.notifications_editable.reset(new_config.notifications)
+            self.backend_editable.reset(new_config.backend)
             self.debug_editable.reset(new_config.debug)

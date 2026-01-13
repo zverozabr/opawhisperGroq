@@ -7,6 +7,7 @@ from typing import Callable
 
 import flet as ft
 
+from .base import safe_control_update
 from .hotkey import (
     KEYBOARD_LAYOUT,
     LETTER_KEYS,
@@ -188,8 +189,4 @@ class VirtualKeyboard(ft.Column):
 
     def _safe_update(self) -> None:
         """Safely update the control."""
-        try:
-            if self.page:
-                self.update()
-        except RuntimeError:
-            pass
+        safe_control_update(self)

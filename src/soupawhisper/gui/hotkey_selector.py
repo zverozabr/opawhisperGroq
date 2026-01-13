@@ -7,6 +7,7 @@ from typing import Callable
 
 import flet as ft
 
+from .base import get_page_safe, safe_update
 from .hotkey import (
     MODIFIER_KEYS,
     format_hotkey,
@@ -298,11 +299,8 @@ class HotkeySelector(ft.Row):
 
     def _safe_update(self, control: ft.Control) -> None:
         """Safely update a control."""
-        try:
-            if self.page:
-                control.update()
-        except RuntimeError:
-            pass
+        page = get_page_safe(self)
+        safe_update(page, control)
 
     @property
     def value(self) -> str:

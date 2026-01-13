@@ -6,6 +6,8 @@ import flet as ft
 
 from soupawhisper.storage import HistoryEntry, HistoryStorage
 
+from .base import safe_control_update, show_snack_on_control
+
 
 class HistoryTab(ft.Column):
     """Tab displaying transcription history with copy buttons."""
@@ -56,11 +58,7 @@ class HistoryTab(ft.Column):
             for entry in entries:
                 self.controls.append(self._create_entry_card(entry))
 
-        try:
-            if self.page:
-                self.update()
-        except RuntimeError:
-            pass  # Not added to page yet
+        safe_control_update(self)
 
     def _create_entry_card(self, entry: HistoryEntry) -> ft.Container:
         """Create a card for a single history entry."""
@@ -100,13 +98,4 @@ class HistoryTab(ft.Column):
     def _copy_text(self, text: str) -> None:
         """Copy text and show feedback."""
         self.on_copy(text)
-        try:
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Copied"),
-                    duration=1000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-        except RuntimeError:
-            pass  # Control not attached to page yet
+        show_snack_on_control(self, "Copied")

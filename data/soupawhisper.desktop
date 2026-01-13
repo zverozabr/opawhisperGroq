@@ -8,4 +8,4 @@ Type=Application
 Categories=AudioVideo;Audio;Utility;
 Keywords=voice;dictation;transcription;whisper;speech;
 StartupNotify=true
-StartupWMClass=soupawhisper
+StartupWMClass=flet
