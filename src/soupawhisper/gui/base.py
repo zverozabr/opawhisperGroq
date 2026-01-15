@@ -87,6 +87,24 @@ def show_snack_on_control(control: ft.Control, message: str, duration: int = 100
     show_snack(page, message, duration)
 
 
+def send_ui_event(page: ft.Page | None, event_type: str, **data) -> None:
+    """Send event to UI thread via pubsub.
+    
+    This is the thread-safe way to notify the UI of changes from
+    background threads. The subscriber will be called in the UI thread.
+    
+    Args:
+        page: The page to send event on (can be None)
+        event_type: Type of event (e.g., "transcription_complete")
+        **data: Additional data to include in the event
+    """
+    if page:
+        try:
+            page.pubsub.send_all({"type": event_type, **data})
+        except Exception:
+            pass  # Page closed or pubsub not available
+
+
 class SafeUpdateMixin:
     """Mixin providing safe update functionality for Flet components.
     

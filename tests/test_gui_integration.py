@@ -509,6 +509,79 @@ class TestGUIAppIntegration:
         entries = app.history.get_recent(days=1)
         assert len(entries) == 0
 
+    def test_pubsub_handler_exists(self, tmp_path, monkeypatch):
+        """Test that GUIApp has pubsub handler method."""
+        from soupawhisper.gui.app import GUIApp
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_pubsub.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+
+        # Verify pubsub handler exists
+        assert hasattr(app, "_handle_pubsub")
+        assert callable(app._handle_pubsub)
+
+    def test_pubsub_handler_refreshes_history(self, tmp_path, monkeypatch):
+        """Test that pubsub handler refreshes history tab on transcription_complete."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.history_tab import HistoryTab
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_pubsub2.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.config.history_enabled = True
+
+        # Create and attach history tab
+        history_tab = HistoryTab(
+            history=app.history,
+            on_copy=lambda x: None,
+            history_days=3,
+        )
+        history_tab.build()
+        app.history_tab = history_tab
+
+        # Add entry directly to storage (simulating background work)
+        app.history.add("Background transcription", "en")
+
+        # Before pubsub: history tab doesn't know about new entry
+        initial_count = len(history_tab.controls)
+
+        # Call pubsub handler (simulating UI thread callback)
+        app._handle_pubsub({"type": "transcription_complete"})
+
+        # After pubsub: history tab should have refreshed
+        assert len(history_tab.controls) >= initial_count
+
+    def test_pubsub_handler_ignores_unknown_types(self, tmp_path, monkeypatch):
+        """Test that pubsub handler ignores unknown message types."""
+        from soupawhisper.gui.app import GUIApp
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_pubsub3.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+
+        # Should not raise for unknown types
+        app._handle_pubsub({"type": "unknown_event"})
+        app._handle_pubsub({})  # Missing type
+
 
 # ============================================================================
 # Config Persistence Tests

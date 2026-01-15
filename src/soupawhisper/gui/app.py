@@ -15,6 +15,7 @@ from soupawhisper.config import CONFIG_PATH, Config
 from soupawhisper.logging import get_logger
 from soupawhisper.storage import HistoryStorage
 
+from .base import send_ui_event
 from .history_tab import HistoryTab
 from .settings_tab import SettingsTab
 from .worker import WorkerManager
@@ -86,6 +87,9 @@ class GUIApp:
 
         # Handle cleanup when window closes
         self.page.on_disconnect = self._on_disconnect
+
+        # Subscribe to UI events from background threads (thread-safe)
+        self.page.pubsub.subscribe(self._handle_pubsub)
 
     def _setup_tabs(self) -> None:
         """Create tab layout with manual switching."""
@@ -179,24 +183,34 @@ class GUIApp:
         pass  # Status indicator removed (was tray icon)
 
     def _on_transcription(self, text: str, language: str) -> None:
-        """Called when transcription completes.
+        """Called when transcription completes (from background thread).
 
         Args:
             text: Transcribed text
             language: Detected language
         """
-        # Save to history
+        # Save to history (safe in background thread)
         if self.config.history_enabled:
             self.history.add(text, language)
             self.history.delete_old(self.config.history_days)
 
-        # Refresh history tab (called from background thread)
-        if self.history_tab and self.page:
-            try:
+        # Notify UI thread via pub/sub (thread-safe)
+        send_ui_event(self.page, "transcription_complete")
+
+    def _handle_pubsub(self, message: dict) -> None:
+        """Handle pub/sub messages in UI thread.
+
+        This is called by Flet in the UI thread, making it safe
+        to update controls.
+
+        Args:
+            message: Message dict with "type" key
+        """
+        if message.get("type") == "transcription_complete":
+            if self.history_tab:
                 self.history_tab.refresh()
-                self.page.update()  # Force UI update from background thread
-            except Exception as e:
-                log.warning(f"Failed to refresh history: {e}")
+            if self.page:
+                self.page.update()
 
     def _copy_to_clipboard(self, text: str) -> None:
         """Copy text to clipboard.
