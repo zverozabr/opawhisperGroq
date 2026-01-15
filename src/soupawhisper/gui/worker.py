@@ -140,8 +140,9 @@ class WorkerManager:
                 )
                 return "flet.exe" in result.stdout
             else:
+                # Check for Flet process (macOS: Flet.app, Linux: flet/flet)
                 result = subprocess.run(
-                    ["pgrep", "-f", "flet/flet"],
+                    ["pgrep", "-f", "Flet.app|flet/flet"],
                     capture_output=True,
                     timeout=5,
                 )

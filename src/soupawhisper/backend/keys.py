@@ -3,9 +3,14 @@
 from pynput import keyboard as pynput_keyboard
 
 
+def _safe_key(name: str) -> pynput_keyboard.Key | None:
+    """Safely get a pynput Key attribute (some keys don't exist on all platforms)."""
+    return getattr(pynput_keyboard.Key, name, None)
+
+
 # Pynput hotkey mapping (used by X11, Darwin, Windows)
 # Some keys map to multiple pynput keys (e.g., alt_r can be alt_r OR alt_gr on Linux)
-PYNPUT_HOTKEY_MAP = {
+_PYNPUT_HOTKEY_MAP_RAW = {
     "ctrl_r": pynput_keyboard.Key.ctrl_r,
     "ctrl_l": pynput_keyboard.Key.ctrl_l,
     "ctrl": pynput_keyboard.Key.ctrl_l,  # Generic ctrl -> left ctrl
@@ -38,8 +43,10 @@ PYNPUT_HOTKEY_MAP = {
     "enter": pynput_keyboard.Key.enter,
     "tab": pynput_keyboard.Key.tab,
     "escape": pynput_keyboard.Key.esc,
-    "pause": pynput_keyboard.Key.pause,
+    "pause": _safe_key("pause"),  # Not available on macOS
 }
+# Filter out None values (keys not available on this platform)
+PYNPUT_HOTKEY_MAP = {k: v for k, v in _PYNPUT_HOTKEY_MAP_RAW.items() if v is not None}
 
 # Pynput special key mapping (for press_key)
 PYNPUT_SPECIAL_KEYS = {
@@ -132,53 +139,31 @@ def get_pynput_special_key(key_name: str) -> pynput_keyboard.Key | None:
 
 # Valid hotkey names for config validation
 # Used by config.py to validate hotkey settings
+# Built dynamically to handle platform-specific keys (some don't exist on macOS)
+_KEY_TO_NAME_SPEC = [
+    # Modifiers
+    ("ctrl_r", "ctrl_r"), ("ctrl_l", "ctrl_l"), ("ctrl", "ctrl_l"),
+    ("alt_gr", "alt_gr"), ("alt_r", "alt_r"), ("alt", "alt_l"), ("alt_l", "alt_l"),
+    ("shift_r", "shift_r"), ("shift", "shift_l"),
+    ("cmd_r", "super_r"), ("cmd", "super_l"),
+    # Function keys
+    ("f1", "f1"), ("f2", "f2"), ("f3", "f3"), ("f4", "f4"), ("f5", "f5"),
+    ("f6", "f6"), ("f7", "f7"), ("f8", "f8"), ("f9", "f9"), ("f10", "f10"),
+    ("f11", "f11"), ("f12", "f12"), ("f13", "f13"), ("f14", "f14"), ("f15", "f15"),
+    ("f16", "f16"), ("f17", "f17"), ("f18", "f18"), ("f19", "f19"), ("f20", "f20"),
+    # Common keys
+    ("space", "space"), ("enter", "enter"), ("tab", "tab"),
+    ("esc", "escape"), ("backspace", "backspace"),
+    ("caps_lock", "caps_lock"), ("delete", "delete"),
+    ("home", "home"), ("end", "end"), ("page_up", "page_up"), ("page_down", "page_down"),
+    # Platform-specific keys (may not exist on macOS)
+    ("num_lock", "num_lock"), ("scroll_lock", "scroll_lock"),
+    ("print_screen", "print_screen"), ("pause", "pause"),
+    ("insert", "insert"), ("menu", "menu"),
+]
+
 PYNPUT_KEY_TO_NAME: dict[pynput_keyboard.Key, str] = {
-    pynput_keyboard.Key.ctrl_r: "ctrl_r",
-    pynput_keyboard.Key.ctrl_l: "ctrl_l",
-    pynput_keyboard.Key.ctrl: "ctrl_l",
-    pynput_keyboard.Key.alt_gr: "alt_gr",
-    pynput_keyboard.Key.alt_r: "alt_r",
-    pynput_keyboard.Key.alt: "alt_l",
-    pynput_keyboard.Key.alt_l: "alt_l",
-    pynput_keyboard.Key.shift_r: "shift_r",
-    pynput_keyboard.Key.shift: "shift_l",
-    pynput_keyboard.Key.cmd_r: "super_r",
-    pynput_keyboard.Key.cmd: "super_l",
-    pynput_keyboard.Key.f1: "f1",
-    pynput_keyboard.Key.f2: "f2",
-    pynput_keyboard.Key.f3: "f3",
-    pynput_keyboard.Key.f4: "f4",
-    pynput_keyboard.Key.f5: "f5",
-    pynput_keyboard.Key.f6: "f6",
-    pynput_keyboard.Key.f7: "f7",
-    pynput_keyboard.Key.f8: "f8",
-    pynput_keyboard.Key.f9: "f9",
-    pynput_keyboard.Key.f10: "f10",
-    pynput_keyboard.Key.f11: "f11",
-    pynput_keyboard.Key.f12: "f12",
-    pynput_keyboard.Key.f13: "f13",
-    pynput_keyboard.Key.f14: "f14",
-    pynput_keyboard.Key.f15: "f15",
-    pynput_keyboard.Key.f16: "f16",
-    pynput_keyboard.Key.f17: "f17",
-    pynput_keyboard.Key.f18: "f18",
-    pynput_keyboard.Key.f19: "f19",
-    pynput_keyboard.Key.f20: "f20",
-    pynput_keyboard.Key.space: "space",
-    pynput_keyboard.Key.enter: "enter",
-    pynput_keyboard.Key.tab: "tab",
-    pynput_keyboard.Key.esc: "escape",
-    pynput_keyboard.Key.backspace: "backspace",
-    pynput_keyboard.Key.caps_lock: "caps_lock",
-    pynput_keyboard.Key.num_lock: "num_lock",
-    pynput_keyboard.Key.scroll_lock: "scroll_lock",
-    pynput_keyboard.Key.print_screen: "print_screen",
-    pynput_keyboard.Key.pause: "pause",
-    pynput_keyboard.Key.insert: "insert",
-    pynput_keyboard.Key.delete: "delete",
-    pynput_keyboard.Key.home: "home",
-    pynput_keyboard.Key.end: "end",
-    pynput_keyboard.Key.page_up: "page_up",
-    pynput_keyboard.Key.page_down: "page_down",
-    pynput_keyboard.Key.menu: "menu",
+    key: name
+    for attr, name in _KEY_TO_NAME_SPEC
+    if (key := _safe_key(attr)) is not None
 }

@@ -62,10 +62,16 @@ class GUIApp:
         Args:
             page: Flet page instance
         """
-        self.page = page
-        self._setup_page()
-        self._setup_tabs()
-        self._start_worker()
+        try:
+            self.page = page
+            self._setup_page()
+            self._setup_tabs()
+            self.page.update()  # Render UI before starting worker
+            self._start_worker()
+        except Exception as e:
+            log.error(f"GUI init error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _setup_page(self) -> None:
         """Configure page settings."""

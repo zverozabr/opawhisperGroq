@@ -34,11 +34,11 @@ class HistoryTab(ft.Column):
 
     def build(self) -> ft.Column:
         """Build the history list."""
-        self.refresh()
+        self._populate()  # Don't call update during build
         return self
 
-    def refresh(self) -> None:
-        """Refresh history entries from database."""
+    def _populate(self) -> None:
+        """Populate controls without updating (for initial build)."""
         entries = self.history.get_recent(self.history_days)
         self.controls.clear()
 
@@ -58,6 +58,9 @@ class HistoryTab(ft.Column):
             for entry in entries:
                 self.controls.append(self._create_entry_card(entry))
 
+    def refresh(self) -> None:
+        """Refresh history entries from database."""
+        self._populate()
         safe_control_update(self)
 
     def _create_entry_card(self, entry: HistoryEntry) -> ft.Container:

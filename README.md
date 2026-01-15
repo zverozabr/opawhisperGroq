@@ -54,9 +54,21 @@ cd soupawhisper
 uv sync
 ```
 
-### Desktop Entry (Linux)
+### Desktop Integration
+
+**Linux** (Application Menu):
 ```bash
 ./scripts/install-desktop.sh
+```
+
+**macOS** (Spotlight):
+```bash
+./scripts/install-macos.sh
+```
+
+**Windows** (Start Menu):
+```powershell
+.\scripts\install-windows.ps1
 ```
 
 ## Configuration

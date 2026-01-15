@@ -1,10 +1,12 @@
 """Tests for backend stop functionality."""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Wayland only on Linux")
 class TestWaylandBackendStop:
     """Tests for WaylandBackend.stop()."""
 
@@ -118,6 +120,7 @@ class TestTypeTextReturnsMethod:
 
             assert method == "pynput"
 
+    @pytest.mark.skipif(sys.platform != "linux", reason="Wayland only on Linux")
     def test_wayland_returns_method(self):
         """Test WaylandBackend.type_text() returns method used."""
         # Test wtype path
@@ -129,6 +132,7 @@ class TestTypeTextReturnsMethod:
 
             assert method == "wtype"
 
+    @pytest.mark.skipif(sys.platform != "linux", reason="Wayland only on Linux")
     def test_wayland_falls_back_to_clipboard(self):
         """Test WaylandBackend falls back to clipboard."""
         with patch("soupawhisper.backend.wayland._try_wtype", return_value=False):

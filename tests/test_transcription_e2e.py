@@ -1,5 +1,6 @@
 """E2E tests for transcription flow using real debug recordings."""
 
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -194,6 +195,7 @@ class TestClipboardPasteFlow:
                 assert "кириллица" in call_args
                 assert method == "xdotool"
 
+    @pytest.mark.skipif(sys.platform != "linux", reason="Wayland only on Linux")
     def test_wayland_fallback_to_clipboard(self):
         """Test Wayland backend falls back to clipboard when typing unavailable."""
         with patch("soupawhisper.backend.wayland._has_command", return_value=False):

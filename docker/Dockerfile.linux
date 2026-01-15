@@ -9,6 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio \
     libgtk-3-0 \
     libnotify-bin \
+    build-essential \
+    linux-libc-dev \
+    python3-dev \
+    xvfb \
+    xauth \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -17,12 +22,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 COPY tests/ ./tests/
+COPY data/ ./data/
 
 # Install dependencies
 RUN uv sync --frozen
 
-# Run tests
-CMD ["uv", "run", "pytest", "-v", "--ignore=tests/test_playwright_e2e.py", "--ignore=tests/test_gui_e2e.py"]
+# Run tests with virtual X server
+ENV DISPLAY=:99
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x16 &>/dev/null & sleep 1 && uv run pytest -v --ignore=tests/test_playwright_e2e.py --ignore=tests/test_gui_e2e.py"]
