@@ -25,6 +25,8 @@ def mock_config():
     config.auto_enter = False
     config.typing_delay = 12
     config.notifications = True
+    config.backend = "auto"
+    config.audio_device = "default"
     return config
 
 
@@ -33,10 +35,11 @@ def tui_app_patched(mock_config):
     """Create patched TUIApp for testing."""
     with patch("soupawhisper.tui.app.Config.load", return_value=mock_config):
         with patch("soupawhisper.tui.app.HistoryStorage") as mock_history:
-            mock_history.return_value.get_recent.return_value = []
-            from soupawhisper.tui.app import TUIApp
-            app = TUIApp(test_mode=True)
-            yield app
+            with patch("soupawhisper.tui.app.WorkerManager"):
+                mock_history.return_value.get_recent.return_value = []
+                from soupawhisper.tui.app import TUIApp
+                app = TUIApp(test_mode=True)
+                yield app
 
 
 class TestTUIIntegrationRecording:

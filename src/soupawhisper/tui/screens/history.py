@@ -6,6 +6,7 @@ Single Responsibility: Display and manage transcription history.
 from datetime import datetime
 from typing import Optional
 
+from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import DataTable
 
@@ -43,6 +44,13 @@ class HistoryScreen(Container):
         color: $text-muted;
     }
     """
+
+    BINDINGS = [
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("k", "cursor_up", "Up", show=False),
+        Binding("g", "cursor_top", "Top", show=False),
+        Binding("G", "cursor_bottom", "Bottom", show=False),
+    ]
 
     def __init__(self, history_storage=None, history_days: int = 3, **kwargs):
         """Initialize history screen.
@@ -144,3 +152,23 @@ class HistoryScreen(Container):
         if len(text) <= max_length:
             return text
         return text[: max_length - 3] + "..."
+
+    def action_cursor_down(self) -> None:
+        """Move cursor down (vim j)."""
+        if self._table:
+            self._table.action_cursor_down()
+
+    def action_cursor_up(self) -> None:
+        """Move cursor up (vim k)."""
+        if self._table:
+            self._table.action_cursor_up()
+
+    def action_cursor_top(self) -> None:
+        """Move cursor to top (vim g)."""
+        if self._table and self._table.row_count > 0:
+            self._table.cursor_coordinate = (0, 0)
+
+    def action_cursor_bottom(self) -> None:
+        """Move cursor to bottom (vim G)."""
+        if self._table and self._table.row_count > 0:
+            self._table.cursor_coordinate = (self._table.row_count - 1, 0)

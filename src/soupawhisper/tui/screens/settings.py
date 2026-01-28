@@ -140,6 +140,15 @@ class SettingsScreen(VerticalScroll):
                     id="hotkey-input",
                 )
 
+            with Horizontal(classes="field-row"):
+                yield Label("Audio Device", classes="field-label")
+                yield Select(
+                    options=self._get_audio_device_options(),
+                    value=self._get_config("audio_device", "default"),
+                    id="audio-device-select",
+                    classes="field-input",
+                )
+
         # Output section
         with Container(classes="section"):
             yield Static("Output", classes="section-title")
@@ -219,6 +228,15 @@ class SettingsScreen(VerticalScroll):
             ("large-v3 (1.5 GB)", "large-v3"),
         ]
 
+    def _get_audio_device_options(self):
+        """Get available audio device options."""
+        # Default option + platform-specific devices
+        # In production, would enumerate actual devices
+        return [
+            ("Default", "default"),
+            ("System Microphone", "system"),
+        ]
+
     def _get_config(self, key: str, default):
         """Get config value safely.
 
@@ -249,6 +267,7 @@ class SettingsScreen(VerticalScroll):
             "provider-select": "active_provider",
             "model-select": "model",
             "language-select": "language",
+            "audio-device-select": "audio_device",
         }
         field_name = field_map.get(event.select.id)
         if field_name:

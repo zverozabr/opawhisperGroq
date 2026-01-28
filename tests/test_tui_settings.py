@@ -19,6 +19,7 @@ def create_mock_config(**overrides):
     config.model = overrides.get("model", "whisper-large-v3")
     config.language = overrides.get("language", "auto")
     config.hotkey = overrides.get("hotkey", "ctrl_r")
+    config.audio_device = overrides.get("audio_device", "default")
     config.auto_type = overrides.get("auto_type", True)
     config.auto_enter = overrides.get("auto_enter", False)
     config.typing_delay = overrides.get("typing_delay", 12)
@@ -153,6 +154,26 @@ class TestSettingsScreenSave:
             await pilot.pause()
 
             on_save.assert_called_with("auto_type", False)
+
+
+class TestSettingsScreenAudioDevice:
+    """Test audio device selection in settings."""
+
+    @pytest.mark.asyncio
+    async def test_has_audio_device_select(self):
+        """Settings has audio device selector."""
+        from soupawhisper.tui.screens.settings import SettingsScreen
+
+        mock_config = create_mock_config()
+
+        class TestApp(App):
+            def compose(self) -> ComposeResult:
+                yield SettingsScreen(config=mock_config)
+
+        async with TestApp().run_test() as pilot:
+            # Should have audio device select
+            device_select = pilot.app.query("#audio-device-select")
+            assert len(device_select) == 1
 
 
 class TestSettingsScreenSections:
