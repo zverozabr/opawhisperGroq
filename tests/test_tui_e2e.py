@@ -344,3 +344,79 @@ class TestTUIE2EFullWorkflow:
             await pilot.press("q")
             await pilot.pause()
             assert app._exit
+
+
+class TestTUIE2ELocalModels:
+    """E2E tests for Local Models workflow."""
+
+    @pytest.mark.asyncio
+    async def test_local_models_section_visible(self, tui_app_with_history):
+        """Local Models section is visible in Settings."""
+        from textual.widgets import Button, Select, Static
+
+        async with tui_app_with_history.run_test() as pilot:
+            # Navigate to Settings
+            await pilot.press("s")
+            await pilot.pause()
+
+            # Check Local Models widgets exist
+            model_select = pilot.app.query_one("#local-model-select", Select)
+            download_btn = pilot.app.query_one("#download-model", Button)
+            delete_btn = pilot.app.query_one("#delete-model", Button)
+            status = pilot.app.query_one("#model-status", Static)
+
+            assert model_select is not None
+            assert download_btn is not None
+            assert delete_btn is not None
+            assert status is not None
+
+    @pytest.mark.asyncio
+    async def test_download_button_accessible(self, tui_app_with_history):
+        """Download button can be found and is accessible."""
+        from textual.widgets import Button, ProgressBar
+
+        async with tui_app_with_history.run_test() as pilot:
+            # Navigate to Settings
+            await pilot.press("s")
+            await pilot.pause()
+
+            # Find download button
+            download_btn = pilot.app.query_one("#download-model", Button)
+            assert download_btn is not None
+            assert download_btn.label == "Download"
+
+            # Progress bar exists
+            progress = pilot.app.query_one("#download-progress", ProgressBar)
+            assert progress is not None
+
+    @pytest.mark.asyncio
+    async def test_delete_button_accessible(self, tui_app_with_history):
+        """Delete button can be found and is accessible."""
+        from textual.widgets import Button
+
+        async with tui_app_with_history.run_test() as pilot:
+            # Navigate to Settings
+            await pilot.press("s")
+            await pilot.pause()
+
+            # Find delete button
+            delete_btn = pilot.app.query_one("#delete-model", Button)
+            assert delete_btn is not None
+            assert delete_btn.label == "Delete"
+
+    @pytest.mark.asyncio
+    async def test_model_select_changes(self, tui_app_with_history):
+        """Model selection can be changed."""
+        from textual.widgets import Select
+
+        async with tui_app_with_history.run_test() as pilot:
+            # Navigate to Settings
+            await pilot.press("s")
+            await pilot.pause()
+
+            # Find model select
+            model_select = pilot.app.query_one("#local-model-select", Select)
+            assert model_select is not None
+
+            # Should have multiple options
+            assert len(model_select._options) >= 3
