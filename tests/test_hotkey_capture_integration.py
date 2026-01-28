@@ -1,5 +1,18 @@
 """Integration tests for hotkey mappings."""
 
+from unittest.mock import patch
+
+
+# Mock providers config for settings tab tests
+MOCK_PROVIDERS_CONFIG = {
+    "active": "groq",
+    "providers": {
+        "groq": {
+            "type": "openai_compatible",
+            "api_key": "test_key",
+        }
+    }
+}
 
 
 class TestKeyMappingConsistency:
@@ -45,12 +58,14 @@ class TestHotkeySelectorIntegration:
         from soupawhisper.config import Config
 
         config = Config(api_key="key", hotkey="f9")
-        tab = SettingsTab(config=config, on_save=lambda f, v: None)
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=config, on_save=lambda f, v: None)
+                tab.build()
 
-        # HotkeySelector should be in the settings
-        assert hasattr(tab, "hotkey_selector")
-        assert tab.hotkey_selector.selected == "f9"
+                # HotkeySelector should be in the settings
+                assert hasattr(tab, "hotkey_selector")
+                assert tab.hotkey_selector.selected == "f9"
 
     def test_hotkey_selector_combo_in_settings(self):
         """Test that HotkeySelector handles combos in settings."""
@@ -58,11 +73,13 @@ class TestHotkeySelectorIntegration:
         from soupawhisper.config import Config
 
         config = Config(api_key="key", hotkey="ctrl+g")
-        tab = SettingsTab(config=config, on_save=lambda f, v: None)
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=config, on_save=lambda f, v: None)
+                tab.build()
 
-        # Should show combo correctly
-        assert tab.hotkey_selector.selected == "ctrl+g"
+                # Should show combo correctly
+                assert tab.hotkey_selector.selected == "ctrl+g"
 
     def test_hotkey_selector_has_change_button(self):
         """Test that HotkeySelector has a Change button."""
@@ -70,11 +87,13 @@ class TestHotkeySelectorIntegration:
         from soupawhisper.config import Config
 
         config = Config(api_key="key", hotkey="f9")
-        tab = SettingsTab(config=config, on_save=lambda f, v: None)
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=config, on_save=lambda f, v: None)
+                tab.build()
 
-        assert hasattr(tab.hotkey_selector, "_change_btn")
-        assert tab.hotkey_selector._change_btn is not None
+                assert hasattr(tab.hotkey_selector, "_change_btn")
+                assert tab.hotkey_selector._change_btn is not None
 
     def test_hotkey_selector_reset(self):
         """Test that HotkeySelector reset updates value."""
@@ -82,10 +101,12 @@ class TestHotkeySelectorIntegration:
         from soupawhisper.config import Config
 
         config = Config(api_key="key", hotkey="f9")
-        tab = SettingsTab(config=config, on_save=lambda f, v: None)
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=config, on_save=lambda f, v: None)
+                tab.build()
 
-        # Reset to new value
-        tab.hotkey_selector.reset("ctrl+g")
+                # Reset to new value
+                tab.hotkey_selector.reset("ctrl+g")
 
-        assert tab.hotkey_selector.selected == "ctrl+g"
+                assert tab.hotkey_selector.selected == "ctrl+g"

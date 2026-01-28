@@ -89,11 +89,18 @@ def run_cli(config: Config) -> None:
     app.run()
 
 
-def run_gui() -> None:
-    """Run in GUI mode."""
-    from .gui import run_gui as gui_main
+def run_tui() -> None:
+    """Run in TUI mode (default)."""
+    from .tui import run_tui as tui_main
 
-    gui_main()
+    tui_main()
+
+
+def run_gui() -> None:
+    """Run in legacy GUI mode (Flet) - DEPRECATED."""
+    log.warning("GUI mode has been removed. Use TUI mode instead.")
+    log.info("Starting TUI mode...")
+    run_tui()
 
 
 def main() -> None:
@@ -102,14 +109,19 @@ def main() -> None:
         description="Voice dictation tool using Groq Whisper API"
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Run with terminal user interface (default)",
+    )
+    parser.add_argument(
         "--gui",
         action="store_true",
-        help="Run with graphical user interface",
+        help="Run with legacy graphical user interface (Flet)",
     )
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="Run without GUI (CLI mode)",
+        help="Run without UI (CLI mode - hotkey only)",
     )
     parser.add_argument(
         "--version",
@@ -130,20 +142,14 @@ def main() -> None:
         for error in errors:
             log.warning(f"  - {error}")
 
-    # Determine mode: GUI or CLI
-    if args.gui:
-        use_gui = True
-    elif args.headless:
-        use_gui = False
-    else:
-        # Auto-detect: use GUI if display available
-        use_gui = has_display()
-
     try:
-        if use_gui:
+        if args.gui:
             run_gui()
-        else:
+        elif args.headless:
             run_cli(config)
+        else:
+            # Default: TUI mode
+            run_tui()
     finally:
         release_lock()
 

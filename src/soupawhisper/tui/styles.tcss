@@ -1,0 +1,10 @@
+/* SoupaWhisper TUI Styles */
+
+/* Main layout */
+#main {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+}
+
+/* Status bar styles - will be added in Stage 2 */

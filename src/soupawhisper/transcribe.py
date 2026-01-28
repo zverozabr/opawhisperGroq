@@ -1,28 +1,42 @@
-"""Speech-to-text transcription via Groq API."""
+"""Speech-to-text transcription - DEPRECATED.
 
-from dataclasses import dataclass
-from typing import Any
+This module is deprecated. Use soupawhisper.providers instead:
 
-import requests
+    from soupawhisper.providers import (
+        OpenAICompatibleProvider,
+        ProviderConfig,
+        TranscriptionError,
+        TranscriptionResult,
+    )
+"""
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+import warnings
 
+# Re-export from providers for backward compatibility
+from soupawhisper.constants import GROQ_API_URL
+from soupawhisper.providers.base import TranscriptionError, TranscriptionResult
+from soupawhisper.providers import OpenAICompatibleProvider, ProviderConfig
 
-class TranscriptionError(Exception):
-    """Raised when transcription fails."""
-
-
-@dataclass
-class TranscriptionResult:
-    """Result from transcription API."""
-
-    text: str
-    raw_response: dict[str, Any]
+__all__ = ["transcribe", "TranscriptionError", "TranscriptionResult", "GROQ_API_URL"]
 
 
 def transcribe(audio_path: str, api_key: str, model: str, language: str) -> TranscriptionResult:
     """
     Transcribe audio file using Groq Whisper API.
+
+    DEPRECATED: Use OpenAICompatibleProvider instead:
+
+        from soupawhisper.providers import OpenAICompatibleProvider, ProviderConfig
+
+        config = ProviderConfig(
+            name="groq",
+            type="openai_compatible",
+            url="https://api.groq.com/openai/v1/audio/transcriptions",
+            api_key=api_key,
+            model=model,
+        )
+        provider = OpenAICompatibleProvider(config)
+        result = provider.transcribe(audio_path, language)
 
     Args:
         audio_path: Path to audio file (WAV format)
@@ -36,26 +50,18 @@ def transcribe(audio_path: str, api_key: str, model: str, language: str) -> Tran
     Raises:
         TranscriptionError: If API call fails
     """
-    headers = {"Authorization": f"Bearer {api_key}"}
-
-    data = {"model": model}
-    if language != "auto":
-        data["language"] = language
-
-    with open(audio_path, "rb") as f:
-        response = requests.post(
-            GROQ_API_URL,
-            headers=headers,
-            files={"file": ("audio.wav", f, "audio/wav")},
-            data=data,
-            timeout=30,
-        )
-
-    if not response.ok:
-        raise TranscriptionError(f"API error {response.status_code}: {response.text}")
-
-    response_json = response.json()
-    return TranscriptionResult(
-        text=response_json.get("text", "").strip(),
-        raw_response=response_json,
+    warnings.warn(
+        "transcribe() is deprecated. Use OpenAICompatibleProvider instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
+
+    config = ProviderConfig(
+        name="groq-legacy",
+        type="openai_compatible",
+        url=GROQ_API_URL,
+        api_key=api_key,
+        model=model,
+    )
+    provider = OpenAICompatibleProvider(config)
+    return provider.transcribe(audio_path, language)

@@ -8,8 +8,8 @@ from .backend.base import DisplayBackend
 from .config import Config
 from .logging import get_logger
 from .output import notify
+from .providers import TranscriptionError, TranscriptionResult, get_provider
 from .storage import DebugData, DebugStorage
-from .transcribe import TranscriptionError, TranscriptionResult, transcribe
 
 log = get_logger()
 
@@ -72,13 +72,9 @@ class TranscriptionHandler:
             return None
 
     def _transcribe(self, ctx: TranscriptionContext) -> TranscriptionResult:
-        """Call the transcription API."""
-        return transcribe(
-            str(ctx.audio_path),
-            ctx.config.api_key,
-            ctx.config.model,
-            ctx.config.language,
-        )
+        """Call the transcription provider."""
+        provider = get_provider(ctx.config.active_provider)
+        return provider.transcribe(str(ctx.audio_path), ctx.config.language)
 
     def _process_result(self, ctx: TranscriptionContext, result: TranscriptionResult) -> None:
         """Process successful transcription result."""

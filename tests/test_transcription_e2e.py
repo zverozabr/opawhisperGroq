@@ -31,6 +31,7 @@ class TestTranscriptionE2E:
         config.auto_type = True
         config.auto_enter = False
         config.debug = False
+        config.active_provider = "groq"
         return config
 
     @pytest.fixture
@@ -66,19 +67,20 @@ class TestTranscriptionE2E:
     @pytest.mark.parametrize("sample", TRANSCRIPTION_SAMPLES)
     def test_transcription_flow(self, sample, mock_config, mock_backend, temp_audio):
         """Test full transcription flow with real sample data."""
-        from soupawhisper.transcribe import TranscriptionResult
+        from soupawhisper.providers import TranscriptionResult
         from soupawhisper.transcription_handler import TranscriptionContext, TranscriptionHandler
 
         expected_text = sample["expected_text"]
         mock_response = sample["response"]
 
-        # Mock transcribe to return real response
-        with patch("soupawhisper.transcription_handler.transcribe") as mock_transcribe:
-            mock_transcribe.return_value = TranscriptionResult(
-                text=mock_response["text"].strip(),
-                raw_response=mock_response,
-            )
+        # Mock get_provider to return a mock provider
+        mock_provider = MagicMock()
+        mock_provider.transcribe.return_value = TranscriptionResult(
+            text=mock_response["text"].strip(),
+            raw_response=mock_response,
+        )
 
+        with patch("soupawhisper.transcription_handler.get_provider", return_value=mock_provider):
             handler = TranscriptionHandler(mock_config)
             completed = []
 
@@ -106,7 +108,7 @@ class TestTranscriptionE2E:
     def test_transcription_with_debug_storage(self, mock_config, mock_backend, temp_audio):
         """Test transcription saves debug data."""
         from soupawhisper.storage import DebugStorage
-        from soupawhisper.transcribe import TranscriptionResult
+        from soupawhisper.providers import TranscriptionResult
         from soupawhisper.transcription_handler import TranscriptionContext, TranscriptionHandler
 
         mock_config.debug = True
@@ -114,12 +116,13 @@ class TestTranscriptionE2E:
         with tempfile.TemporaryDirectory() as tmpdir:
             debug_storage = DebugStorage(debug_dir=Path(tmpdir))
 
-            with patch("soupawhisper.transcription_handler.transcribe") as mock_transcribe:
-                mock_transcribe.return_value = TranscriptionResult(
-                    text="тестовый текст",
-                    raw_response={"text": " тестовый текст"},
-                )
+            mock_provider = MagicMock()
+            mock_provider.transcribe.return_value = TranscriptionResult(
+                text="тестовый текст",
+                raw_response={"text": " тестовый текст"},
+            )
 
+            with patch("soupawhisper.transcription_handler.get_provider", return_value=mock_provider):
                 handler = TranscriptionHandler(mock_config)
 
                 ctx = TranscriptionContext(
@@ -147,15 +150,16 @@ class TestTranscriptionE2E:
 
     def test_empty_transcription_not_typed(self, mock_config, mock_backend, temp_audio):
         """Test empty transcription is not typed."""
-        from soupawhisper.transcribe import TranscriptionResult
+        from soupawhisper.providers import TranscriptionResult
         from soupawhisper.transcription_handler import TranscriptionContext, TranscriptionHandler
 
-        with patch("soupawhisper.transcription_handler.transcribe") as mock_transcribe:
-            mock_transcribe.return_value = TranscriptionResult(
-                text="",
-                raw_response={"text": ""},
-            )
+        mock_provider = MagicMock()
+        mock_provider.transcribe.return_value = TranscriptionResult(
+            text="",
+            raw_response={"text": ""},
+        )
 
+        with patch("soupawhisper.transcription_handler.get_provider", return_value=mock_provider):
             handler = TranscriptionHandler(mock_config)
 
             ctx = TranscriptionContext(

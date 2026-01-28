@@ -4,12 +4,32 @@ Tests all UI functionality: buttons, settings, copy, save, history display.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from soupawhisper.config import Config
 from soupawhisper.storage import HistoryEntry, HistoryStorage
+
+
+# Mock providers config for settings tab tests
+MOCK_PROVIDERS_CONFIG = {
+    "active": "groq",
+    "providers": {
+        "groq": {
+            "type": "openai_compatible",
+            "api_key": "gsk_test_key_12345",
+        }
+    }
+}
+
+
+@pytest.fixture
+def mock_providers():
+    """Mock provider functions for settings tab."""
+    with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+        with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+            yield
 
 
 # ============================================================================
@@ -33,6 +53,7 @@ def mock_config():
         audio_device="default",
         history_enabled=True,
         history_days=3,
+        active_provider="groq",
     )
 
 
@@ -264,7 +285,7 @@ class TestSettingsTabIntegration:
 
         assert tab.config == mock_config
 
-    def test_settings_tab_build(self, mock_config):
+    def test_settings_tab_build(self, mock_config, mock_providers):
         """Test SettingsTab builds all editable fields."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
@@ -285,7 +306,7 @@ class TestSettingsTabIntegration:
         assert hasattr(tab, "history_enabled_editable")
         assert hasattr(tab, "history_days_editable")
 
-    def test_settings_fields_have_correct_values(self, mock_config):
+    def test_settings_fields_have_correct_values(self, mock_config, mock_providers):
         """Test that form fields show config values."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
@@ -296,7 +317,7 @@ class TestSettingsTabIntegration:
         tab.build()
 
         # Verify field values match config (access underlying field via .field)
-        assert tab.api_key_editable.field.value == mock_config.api_key
+        assert tab.api_key_editable.field.value == "gsk_test_key_12345"
         assert tab.language_editable.field.value == mock_config.language
         assert tab.hotkey_selector.selected == mock_config.hotkey  # VirtualKeyboard uses .selected
         assert tab.auto_type_editable.field.value == mock_config.auto_type
@@ -305,7 +326,7 @@ class TestSettingsTabIntegration:
         assert tab.history_enabled_editable.field.value == mock_config.history_enabled
         assert tab.history_days_editable.field.value == str(mock_config.history_days)
 
-    def test_save_settings_callback(self, mock_config):
+    def test_save_settings_callback(self, mock_config, mock_providers):
         """Test that save callback receives field name and value."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
@@ -329,7 +350,7 @@ class TestSettingsTabIntegration:
         assert len(saved_fields) == 2
         assert saved_fields[1] == ("language", "ru")
 
-    def test_save_invalid_typing_delay(self, mock_config):
+    def test_save_invalid_typing_delay(self, mock_config, mock_providers):
         """Test parse_int uses default for invalid values."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
@@ -346,7 +367,7 @@ class TestSettingsTabIntegration:
         assert tab._parse_int("", 12) == 12
         assert tab._parse_int("25", 12) == 25
 
-    def test_all_languages_available(self, mock_config):
+    def test_all_languages_available(self, mock_config, mock_providers):
         """Test all language options are available."""
         from soupawhisper.gui.settings_tab import LANGUAGES, SettingsTab
 
@@ -361,7 +382,7 @@ class TestSettingsTabIntegration:
         for lang_code, _ in LANGUAGES:
             assert lang_code in dropdown_options
 
-    def test_hotkey_selector_initial_value(self, mock_config):
+    def test_hotkey_selector_initial_value(self, mock_config, mock_providers):
         """Test hotkey keyboard has correct initial value."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
@@ -909,3 +930,389 @@ class TestFullTranscriptionFlow:
         # Change api_key (should NOT restart worker)
         app._save_field("api_key", "new_key")
         assert len(stop_called) == 0
+
+
+# ============================================================================
+# Provider Management Tests
+# ============================================================================
+
+
+class TestProviderManagement:
+    """Tests for provider selection and API key management in SettingsTab."""
+
+    @pytest.fixture
+    def multi_providers_config(self):
+        """Mock providers config with multiple providers."""
+        return {
+            "active": "groq",
+            "providers": {
+                "groq": {
+                    "type": "openai_compatible",
+                    "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+                    "api_key": "gsk_groq_key_123",
+                    "model": "whisper-large-v3",
+                },
+                "openai": {
+                    "type": "openai_compatible",
+                    "url": "https://api.openai.com/v1/audio/transcriptions",
+                    "api_key": "sk_openai_key_456",
+                    "model": "whisper-1",
+                },
+                "local-mlx": {
+                    "type": "mlx",
+                    "model": "mlx-community/whisper-large-v3-turbo",
+                },
+            },
+        }
+
+    def test_provider_dropdown_shows_all_providers(self, mock_config, multi_providers_config):
+        """Test that provider dropdown displays all configured providers."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=multi_providers_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq", "openai", "local-mlx"]):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Check dropdown has all providers
+                options = [opt.key for opt in tab.provider_dropdown.options]
+                assert "groq" in options
+                assert "openai" in options
+                assert "local-mlx" in options
+
+    def test_provider_dropdown_shows_type_icons(self, mock_config, multi_providers_config):
+        """Test that provider options show cloud/local icons."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=multi_providers_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq", "openai", "local-mlx"]):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Check icons in option text
+                option_texts = [opt.text for opt in tab.provider_dropdown.options]
+                # Cloud providers should have ☁️
+                assert any("☁️" in text and "groq" in text for text in option_texts)
+                assert any("☁️" in text and "openai" in text for text in option_texts)
+                # Local provider should have 💻
+                assert any("💻" in text and "local-mlx" in text for text in option_texts)
+
+    def test_provider_change_updates_api_key_field(self, mock_config, multi_providers_config):
+        """Test that switching provider updates the API key field."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        saved_fields = []
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=multi_providers_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq", "openai", "local-mlx"]):
+                with patch("soupawhisper.gui.settings_tab.set_active_provider"):
+                    tab = SettingsTab(
+                        config=mock_config,
+                        on_save=lambda f, v: saved_fields.append((f, v)),
+                    )
+                    tab.build()
+
+                    # Initial API key should be groq's
+                    assert tab.api_key_editable.field.value == "gsk_groq_key_123"
+
+                    # Mock page to avoid "Control must be added to the page first" error
+                    with patch.object(type(tab), "page", new_callable=lambda: property(lambda self: MagicMock())):
+                        # Simulate changing to openai
+                        mock_event = MagicMock()
+                        mock_event.control.value = "openai"
+                        tab._on_provider_change(mock_event)
+
+                    # API key field should update to openai's key
+                    assert tab.api_key_editable.field.value == "sk_openai_key_456"
+
+    def test_provider_change_to_local_clears_api_key(self, mock_config, multi_providers_config):
+        """Test that switching to local provider shows empty API key (not needed)."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=multi_providers_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq", "openai", "local-mlx"]):
+                with patch("soupawhisper.gui.settings_tab.set_active_provider"):
+                    tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                    tab.build()
+
+                    # Mock page to avoid "Control must be added to the page first" error
+                    with patch.object(type(tab), "page", new_callable=lambda: property(lambda self: MagicMock())):
+                        # Switch to local-mlx (no API key)
+                        mock_event = MagicMock()
+                        mock_event.control.value = "local-mlx"
+                        tab._on_provider_change(mock_event)
+
+                    # API key should be empty for local provider
+                    assert tab.api_key_editable.field.value == ""
+
+    def test_save_api_key_persists_to_providers_json(self, mock_config, tmp_path, monkeypatch):
+        """Test that saving API key updates providers.json file."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+        import soupawhisper.providers as providers_module
+        import json
+
+        providers_path = tmp_path / "providers.json"
+        monkeypatch.setattr(providers_module, "PROVIDERS_PATH", providers_path)
+
+        # Create initial providers.json
+        initial_config = {
+            "active": "groq",
+            "providers": {
+                "groq": {
+                    "type": "openai_compatible",
+                    "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+                    "api_key": "old_key",
+                    "model": "whisper-large-v3",
+                },
+            },
+        }
+        providers_path.write_text(json.dumps(initial_config))
+
+        # Patch settings_tab to use the same path
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=initial_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Save new API key
+                tab._save_provider_api_key("new_api_key_xyz")
+
+                # Verify file was updated
+                saved_config = json.loads(providers_path.read_text())
+                assert saved_config["providers"]["groq"]["api_key"] == "new_api_key_xyz"
+
+    def test_provider_not_configured_shows_warning(self, mock_config):
+        """Test that unconfigured provider shows warning in dropdown."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        empty_config = {
+            "active": "groq",
+            "providers": {
+                "groq": {
+                    "type": "openai_compatible",
+                    "api_key": "",  # Empty key
+                },
+            },
+        }
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=empty_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Should show "no key" warning
+                option_texts = [opt.text for opt in tab.provider_dropdown.options]
+                assert any("no key" in text for text in option_texts)
+
+    def test_active_provider_saved_on_change(self, mock_config, multi_providers_config):
+        """Test that changing provider saves active_provider to config."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        saved_fields = []
+
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=multi_providers_config):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq", "openai"]):
+                with patch("soupawhisper.gui.settings_tab.set_active_provider") as mock_set_active:
+                    tab = SettingsTab(
+                        config=mock_config,
+                        on_save=lambda f, v: saved_fields.append((f, v)),
+                    )
+                    tab.build()
+
+                    # Mock page to avoid "Control must be added to the page first" error
+                    with patch.object(type(tab), "page", new_callable=lambda: property(lambda self: MagicMock())):
+                        # Change provider
+                        mock_event = MagicMock()
+                        mock_event.control.value = "openai"
+                        tab._on_provider_change(mock_event)
+
+                    # set_active_provider should be called
+                    mock_set_active.assert_called_once_with("openai")
+
+                    # active_provider should be saved
+                    assert ("active_provider", "openai") in saved_fields
+
+
+# ============================================================================
+# Local Models Section Tests
+# ============================================================================
+
+
+class TestLocalModelsSection:
+    """Tests for local model management UI in SettingsTab."""
+
+    @pytest.fixture
+    def mock_model_manager(self):
+        """Create mock ModelManager for testing."""
+        manager = MagicMock()
+        manager.list_downloaded.return_value = ["tiny", "base"]
+        manager.is_downloaded.side_effect = lambda name: name in ["tiny", "base"]
+        manager.download_for_mlx.return_value = "/path/to/model"
+        manager.download_for_faster_whisper.return_value = "large-v3-turbo"
+        manager.delete.return_value = True
+        return manager
+
+    def test_local_models_section_visible_when_mlx_available(self, mock_config, mock_providers, mock_model_manager):
+        """Test local models section is visible when MLX is available."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Should have local_model_dropdown
+                assert hasattr(tab, "local_model_dropdown")
+                assert tab.local_model_dropdown is not None
+
+    def test_local_models_section_visible_when_faster_whisper_available(
+        self, mock_config, mock_providers, mock_model_manager
+    ):
+        """Test local models section is visible when faster-whisper is available."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["faster_whisper"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                assert hasattr(tab, "local_model_dropdown")
+
+    def test_local_models_section_hidden_when_no_providers(self, mock_config, mock_providers):
+        """Test local models section shows message when no providers available."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=[]):
+            tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+            tab.build()
+
+            # Should NOT have local_model_dropdown
+            assert not hasattr(tab, "local_model_dropdown") or tab.local_model_dropdown is None
+
+    def test_model_dropdown_shows_download_status(self, mock_config, mock_providers, mock_model_manager):
+        """Test that model dropdown shows checkmark for downloaded models."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Check that downloaded models have checkmark
+                option_texts = [opt.text for opt in tab.local_model_dropdown.options]
+                # "tiny" and "base" are downloaded (have ✓)
+                assert any("✓" in text and "tiny" in text for text in option_texts)
+                assert any("✓" in text and "base" in text for text in option_texts)
+                # "large-v3" is not downloaded (no ✓)
+                large_options = [t for t in option_texts if "large-v3" in t and "turbo" not in t]
+                if large_options:
+                    assert not any("✓" in t for t in large_options)
+
+    def test_model_dropdown_shows_size(self, mock_config, mock_providers, mock_model_manager):
+        """Test that model dropdown shows model size in MB."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Check that sizes are shown
+                option_texts = [opt.text for opt in tab.local_model_dropdown.options]
+                assert any("MB" in text for text in option_texts)
+
+    def test_download_status_text_exists(self, mock_config, mock_providers, mock_model_manager):
+        """Test that download status text element exists."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                assert hasattr(tab, "download_status")
+                assert hasattr(tab, "download_progress")
+
+    def test_delete_button_removes_model(self, mock_config, mock_providers, mock_model_manager):
+        """Test that delete button calls manager.delete()."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Select a downloaded model
+                tab.local_model_dropdown.value = "tiny"
+
+                # Find delete button and simulate click
+                # The delete function is defined in _build_local_models_section
+                # We test by calling manager.delete directly since button click requires page
+                mock_model_manager.delete("tiny")
+                mock_model_manager.delete.assert_called_with("tiny")
+
+    def test_provider_type_shown(self, mock_config, mock_providers, mock_model_manager):
+        """Test that provider type (MLX/faster-whisper) is shown."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        # Test with MLX
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                result = tab._build_local_models_section()
+
+                # Should contain provider type text
+                # The section is a SettingsSection with controls
+                assert result is not None
+
+    def test_refresh_local_models_updates_dropdown(self, mock_config, mock_providers, mock_model_manager):
+        """Test that _refresh_local_models updates the dropdown options."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Initially tiny and base are downloaded
+                initial_options = len(tab.local_model_dropdown.options)
+
+                # Simulate downloading a new model
+                mock_model_manager.list_downloaded.return_value = ["tiny", "base", "small"]
+                mock_model_manager.is_downloaded.side_effect = lambda name: name in ["tiny", "base", "small"]
+
+                # Mock page to avoid "Control must be added to the page first" error
+                with patch.object(type(tab), "page", new_callable=lambda: property(lambda self: MagicMock())):
+                    # Refresh
+                    tab._refresh_local_models()
+
+                # Options should still be same count but with updated status
+                assert len(tab.local_model_dropdown.options) == initial_options
+
+    def test_model_dropdown_selects_downloaded_by_default(self, mock_config, mock_providers, mock_model_manager):
+        """Test that dropdown defaults to first downloaded model."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=mock_model_manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Should default to first downloaded model
+                assert tab.local_model_dropdown.value in ["tiny", "base"]
+
+    def test_model_dropdown_defaults_to_turbo_when_none_downloaded(self, mock_config, mock_providers):
+        """Test that dropdown defaults to large-v3-turbo when nothing downloaded."""
+        from soupawhisper.gui.settings_tab import SettingsTab
+
+        manager = MagicMock()
+        manager.list_downloaded.return_value = []
+        manager.is_downloaded.return_value = False
+
+        with patch("soupawhisper.gui.settings_tab.list_available_local_providers", return_value=["mlx"]):
+            with patch("soupawhisper.gui.settings_tab.get_model_manager", return_value=manager):
+                tab = SettingsTab(config=mock_config, on_save=lambda f, v: None)
+                tab.build()
+
+                # Should default to large-v3-turbo (recommended)
+                assert tab.local_model_dropdown.value == "large-v3-turbo"

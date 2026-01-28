@@ -4,6 +4,8 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 
+from .constants import DEFAULT_MODEL, DEFAULT_PROVIDER
+
 CONFIG_PATH = Path.home() / ".config" / "soupawhisper" / "config.ini"
 
 # Valid option values
@@ -72,7 +74,7 @@ class Config:
     """Application configuration."""
 
     api_key: str
-    model: str = "whisper-large-v3"
+    model: str = DEFAULT_MODEL
     language: str = "auto"  # "auto" for auto-detect, or language code like "ru", "en"
     hotkey: str = "ctrl_r"
     auto_type: bool = True
@@ -84,6 +86,7 @@ class Config:
     history_enabled: bool = True  # Save transcription history
     history_days: int = 3  # Keep history for N days
     debug: bool = False  # Save last 3 recordings for debugging
+    active_provider: str = DEFAULT_PROVIDER  # Active transcription provider name
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
@@ -95,7 +98,7 @@ class Config:
 
         return cls(
             api_key=parser.get("groq", "api_key", fallback=""),
-            model=parser.get("groq", "model", fallback="whisper-large-v3"),
+            model=parser.get("groq", "model", fallback=DEFAULT_MODEL),
             language=parser.get("groq", "language", fallback="auto"),
             hotkey=parser.get("hotkey", "key", fallback="ctrl_r"),
             auto_type=parser.getboolean("behavior", "auto_type", fallback=True),
@@ -107,6 +110,7 @@ class Config:
             history_enabled=parser.getboolean("history", "enabled", fallback=True),
             history_days=parser.getint("history", "days", fallback=3),
             debug=parser.getboolean("behavior", "debug", fallback=False),
+            active_provider=parser.get("provider", "active", fallback=DEFAULT_PROVIDER),
         )
 
     def save(self, path: Path = CONFIG_PATH) -> None:
@@ -133,6 +137,7 @@ class Config:
             "enabled": str(self.history_enabled).lower(),
             "days": str(self.history_days),
         }
+        parser["provider"] = {"active": self.active_provider}
 
         with open(path, "w") as f:
             parser.write(f)

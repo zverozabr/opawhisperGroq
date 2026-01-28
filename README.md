@@ -8,9 +8,10 @@ Voice dictation tool using Groq Whisper API.
 
 - Push-to-talk voice input (configurable hotkey)
 - Fast cloud transcription via Groq API (whisper-large-v3)
+- **Local transcription** — MLX (macOS Apple Silicon) and faster-whisper (cross-platform)
 - Auto-types text into active window
 - Copies to clipboard
-- **GUI mode** with history and settings
+- **TUI mode** — terminal interface with history and settings
 - **Platform-aware UI** — Command/Option on macOS, Ctrl/Alt on Linux/Windows
 - Smart audio device selection with auto-reconnect
 - Debug mode — save recordings for troubleshooting
@@ -111,20 +112,31 @@ Get API key: https://console.groq.com/
 
 ## Usage
 
-### CLI Mode
+### TUI Mode (default)
 ```bash
 uv run soupawhisper
 ```
 
-### GUI Mode
+Terminal interface with tabs for History and Settings.
+
+**Keybindings:**
+- `q` — Quit
+- `h` — History tab
+- `s` — Settings tab
+- `c` — Copy selected transcription
+- `Tab` / `Shift+Tab` — Navigate fields
+
+### Headless Mode (CLI only)
 ```bash
-uv run soupawhisper --gui
+uv run soupawhisper --headless
 ```
 
-**Controls:**
+No UI, only hotkey listening.
+
+**Recording Controls:**
 - Hold **Right Command** (macOS) / **Right Super** (Linux) — record
 - Release — transcribe & type
-- Hotkey configurable in Settings with visual keyboard
+- Hotkey configurable in Settings
 
 ## Platform Support
 

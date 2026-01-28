@@ -1,8 +1,22 @@
 """Tests for hotkey functionality."""
 
+from unittest.mock import patch
+
 from pynput import keyboard
 
 from soupawhisper.config import Config
+
+
+# Mock providers config for settings tab tests
+MOCK_PROVIDERS_CONFIG = {
+    "active": "groq",
+    "providers": {
+        "groq": {
+            "type": "openai_compatible",
+            "api_key": "test_key",
+        }
+    }
+}
 
 
 class TestConfigHotkeyValidation:
@@ -64,26 +78,30 @@ class TestSettingsTabHotkey:
         from soupawhisper.gui.settings_tab import SettingsTab
 
         config = Config(api_key="key", hotkey="ctrl_r")
-        tab = SettingsTab(
-            config=config,
-            on_save=lambda field, value: None,
-        )
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(
+                    config=config,
+                    on_save=lambda field, value: None,
+                )
+                tab.build()
 
-        assert hasattr(tab, "hotkey_selector")
+                assert hasattr(tab, "hotkey_selector")
 
     def test_settings_tab_hotkey_value(self):
         """Test that hotkey_selector has correct initial value."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
         config = Config(api_key="key", hotkey="f12")
-        tab = SettingsTab(
-            config=config,
-            on_save=lambda field, value: None,
-        )
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(
+                    config=config,
+                    on_save=lambda field, value: None,
+                )
+                tab.build()
 
-        assert tab.hotkey_selector.selected == "f12"
+                assert tab.hotkey_selector.selected == "f12"
 
     def test_settings_tab_save_hotkey(self):
         """Test that saving hotkey calls callback."""
@@ -92,33 +110,37 @@ class TestSettingsTabHotkey:
         config = Config(api_key="key", hotkey="ctrl_r")
         saved = []
 
-        tab = SettingsTab(
-            config=config,
-            on_save=lambda field, value: saved.append((field, value)),
-        )
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(
+                    config=config,
+                    on_save=lambda field, value: saved.append((field, value)),
+                )
+                tab.build()
 
-        # Simulate saving hotkey
-        tab._save_field("hotkey", "f9")
+                # Simulate saving hotkey
+                tab._save_field("hotkey", "f9")
 
-        assert ("hotkey", "f9") in saved
+                assert ("hotkey", "f9") in saved
 
     def test_update_config_resets_hotkey_selector(self):
         """Test that update_config resets hotkey_selector."""
         from soupawhisper.gui.settings_tab import SettingsTab
 
         config = Config(api_key="key", hotkey="ctrl_r")
-        tab = SettingsTab(
-            config=config,
-            on_save=lambda field, value: None,
-        )
-        tab.build()
+        with patch("soupawhisper.gui.settings_tab.load_providers_config", return_value=MOCK_PROVIDERS_CONFIG):
+            with patch("soupawhisper.gui.settings_tab.list_providers", return_value=["groq"]):
+                tab = SettingsTab(
+                    config=config,
+                    on_save=lambda field, value: None,
+                )
+                tab.build()
 
-        # Update with new config
-        new_config = Config(api_key="key2", hotkey="f10")
-        tab.update_config(new_config)
+                # Update with new config
+                new_config = Config(api_key="key2", hotkey="f10")
+                tab.update_config(new_config)
 
-        assert tab.hotkey_selector.selected == "f10"
+                assert tab.hotkey_selector.selected == "f10"
 
 
 class TestPynputKeyMapping:
@@ -366,7 +388,7 @@ class TestPlatformAwareKeyNames:
             # Find modifier row and check for symbols
             modifier_row = layout[-2]  # Second to last row has modifiers
             labels = [item[1] for item in modifier_row]
-            assert "⌘" in labels or any("⌘" in l for l in labels)
+            assert "⌘" in labels or any("⌘" in label for label in labels)
 
     def test_get_keyboard_layout_linux(self):
         """get_keyboard_layout returns default layout on Linux."""
@@ -379,4 +401,4 @@ class TestPlatformAwareKeyNames:
             modifier_row = layout[-2]
             labels = [item[1] for item in modifier_row]
             # Should have text labels, not symbols
-            assert any("Ctrl" in l or "Super" in l or "Alt" in l for l in labels)
+            assert any("Ctrl" in label or "Super" in label or "Alt" in label for label in labels)

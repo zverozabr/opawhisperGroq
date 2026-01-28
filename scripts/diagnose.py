@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from soupawhisper.config import Config
 from soupawhisper.audio import AudioRecorder
-from soupawhisper.transcribe import transcribe, TranscriptionError
+from soupawhisper.providers import OpenAICompatibleProvider, ProviderConfig, TranscriptionError
 
 
 def test_audio_devices():
@@ -100,12 +100,15 @@ def test_transcription(audio_path: Path):
 
     print("\nSending to Groq API...")
     try:
-        result = transcribe(
-            str(audio_path),
-            config.api_key,
-            config.model,
-            config.language,
+        provider_config = ProviderConfig(
+            name="groq",
+            type="openai_compatible",
+            url="https://api.groq.com/openai/v1/audio/transcriptions",
+            api_key=config.api_key,
+            model=config.model,
         )
+        provider = OpenAICompatibleProvider(provider_config)
+        result = provider.transcribe(str(audio_path), config.language)
         print(f"\nRESULT: '{result.text}'")
         if not result.text:
             print("WARNING: Empty result - either silent audio or API issue")
