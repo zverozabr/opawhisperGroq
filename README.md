@@ -6,13 +6,14 @@ Voice dictation tool using Groq Whisper API.
 
 ## Features
 
-- Push-to-talk voice input (hold Right Ctrl)
+- Push-to-talk voice input (configurable hotkey)
 - Fast cloud transcription via Groq API (whisper-large-v3)
 - Auto-types text into active window
 - Copies to clipboard
-- Desktop notifications
 - **GUI mode** with history and settings
-- **Debug mode** - save recordings for troubleshooting
+- **Platform-aware UI** — Command/Option on macOS, Ctrl/Alt on Linux/Windows
+- Smart audio device selection with auto-reconnect
+- Debug mode — save recordings for troubleshooting
 - Single instance lock
 - Supports 100+ languages (auto-detect or specify)
 
@@ -39,7 +40,11 @@ sudo usermod -aG input $USER
 brew install ffmpeg
 ```
 
-**Note:** Grant Accessibility permissions: System Settings → Privacy & Security → Accessibility
+**Permissions required:**
+1. **Accessibility** — System Settings → Privacy & Security → Accessibility
+2. **Input Monitoring** — System Settings → Privacy & Security → Input Monitoring
+
+Add the application (or Cursor.app if running from IDE) to both lists.
 
 ### Windows
 ```bash
@@ -51,8 +56,8 @@ choco install ffmpeg
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/soupawhisper
-cd soupawhisper
+git clone https://github.com/zverozabr/opawhisperGroq
+cd soupwhisper
 uv sync
 ```
 
@@ -84,7 +89,10 @@ model = whisper-large-v3
 language = auto  # or "ru", "en", "de", "fr", etc.
 
 [hotkey]
-key = ctrl_r  # ctrl_r, ctrl_l, alt_r, f9-f12
+key = super_r  # Right Command on macOS, Right Super on Linux
+
+[audio]
+device = default  # or specific device ID
 
 [behavior]
 auto_type = true
@@ -114,8 +122,9 @@ uv run soupawhisper --gui
 ```
 
 **Controls:**
-- Hold **Right Ctrl** — record
+- Hold **Right Command** (macOS) / **Right Super** (Linux) — record
 - Release — transcribe & type
+- Hotkey configurable in Settings with visual keyboard
 
 ## Platform Support
 
@@ -127,6 +136,18 @@ uv run soupawhisper --gui
 | Windows | ffmpeg | PowerShell | pynput | pynput |
 
 **KDE Wayland:** Virtual keyboard blocked by security. Text copies to clipboard only — paste with Ctrl+V.
+
+## macOS Permissions
+
+If text is not being typed, check permissions:
+
+1. Open **System Settings → Privacy & Security → Accessibility**
+2. Click **+** and add the app running SoupaWhisper:
+   - If running from terminal: add your terminal app or Python
+   - If running from Cursor: add `/Applications/Cursor.app`
+3. Repeat for **Input Monitoring**
+
+The GUI shows permission status and has a "Fix" button to help configure.
 
 ## Debug Mode
 
@@ -147,6 +168,9 @@ Files saved to `~/.cache/soupawhisper/debug/`:
 ```bash
 # Run tests
 uv run pytest -v
+
+# Skip E2E tests
+uv run pytest -v --ignore=tests/test_playwright_e2e.py --ignore=tests/test_gui_e2e.py
 
 # Run linting
 uv tool run ruff check src/ tests/
