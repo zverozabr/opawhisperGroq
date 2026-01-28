@@ -36,6 +36,10 @@ class TestModelPreload:
 
         assert preloader.calls == [("base", "mlx")]
 
+    @pytest.mark.skipif(
+        __import__("sys").platform != "darwin",
+        reason="MLX status check only on macOS"
+    )
     def test_preload_updates_status(self, tmp_path):
         """Preloading should allow status to be LOADED."""
         from soupawhisper.providers.models import ModelManager, ModelStatus
@@ -63,6 +67,10 @@ class TestModelPreload:
             status = manager.get_model_status("base")
             assert status == ModelStatus.DOWNLOADED
 
+    @pytest.mark.skipif(
+        __import__("sys").platform != "darwin",
+        reason="MLX status check only on macOS"
+    )
     def test_model_status_shows_loaded(self, tmp_path):
         """Loaded model shows LOADED status."""
         from soupawhisper.providers.models import ModelManager, ModelStatus
@@ -108,6 +116,10 @@ class TestModelStatus:
 
         pytest.skip("No downloaded models to test")
 
+    @pytest.mark.skipif(
+        __import__("sys").platform != "darwin",
+        reason="MLX server only available on macOS"
+    )
     def test_status_loaded_in_memory(self):
         """Model loaded in server has LOADED status."""
         from soupawhisper.providers.models import ModelStatus, get_model_manager
@@ -128,6 +140,10 @@ class TestModelStatus:
 class TestPreloadAPI:
     """Test the preload API."""
 
+    @pytest.mark.skipif(
+        __import__("sys").platform != "darwin",
+        reason="MLX server only available on macOS"
+    )
     def test_preload_starts_server(self):
         """Preloading should start the MLX server."""
         from soupawhisper.providers.mlx import is_server_running, shutdown_server
@@ -185,6 +201,10 @@ class TestPreloadAPI:
             manager.preload_model("nonexistent-model-xyz")
 
 
+@pytest.mark.skipif(
+    __import__("sys").platform != "darwin",
+    reason="MLX server only available on macOS"
+)
 class TestModelSwitching:
     """Test switching between models."""
 

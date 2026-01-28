@@ -75,7 +75,6 @@ class TestHotkeyCaptureWidget:
                 yield HotkeyCapture(hotkey="ctrl_r")
 
         async with TestApp().run_test() as pilot:
-            widget = pilot.app.query_one(HotkeyCapture)
             btn = pilot.app.query_one("#set-hotkey-btn", Button)
 
             # Enter capture mode
@@ -220,7 +219,7 @@ class TestHotkeyCaptureE2E:
         from soupawhisper.tui.widgets.hotkey_capture import HotkeyCapture
         from unittest.mock import patch
 
-        with patch("soupawhisper.config.Config.save") as mock_save:
+        with patch("soupawhisper.config.Config.save"):
             app = TUIApp(test_mode=True)
             async with app.run_test(size=(100, 40)) as pilot:
                 await pilot.press("s")

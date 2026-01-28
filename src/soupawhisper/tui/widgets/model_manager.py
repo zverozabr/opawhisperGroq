@@ -27,14 +27,27 @@ class ModelManagerWidget(Static):
 
     def compose(self):
         """Compose Local tab content."""
+        import sys
+        
         with Horizontal(classes="field-row"):
             yield Label("Backend", classes="field-label")
-            yield Select(
-                options=[
+            
+            # Only show MLX option on macOS (Apple Silicon)
+            if sys.platform == "darwin":
+                backend_options = [
                     ("MLX (Apple Silicon)", "mlx"),
                     ("CPU (Cross-platform)", "cpu"),
-                ],
-                value=self._get_config("local_backend", "mlx"),
+                ]
+                default_backend = self._get_config("local_backend", "mlx")
+            else:
+                backend_options = [
+                    ("CPU (Cross-platform)", "cpu"),
+                ]
+                default_backend = "cpu"
+            
+            yield Select(
+                options=backend_options,
+                value=default_backend,
                 id="local-backend-select",
                 classes="field-input",
             )
@@ -166,16 +179,18 @@ class ModelManagerWidget(Static):
             size_label = self.query_one("#model-size", Static)
             manager = get_model_manager()
             model_info = manager.get_model_info(model_name)
-
-            if model_info:
-                size_label.update(f"~{model_info.size_mb} MB")
-
             model_status = manager.get_model_status(model_name)
-
-            if model_status == ModelStatus.LOADED:
+            
+            # Show real size if downloaded, otherwise estimate
+            if model_status in (ModelStatus.DOWNLOADED, ModelStatus.LOADED):
                 disk_size = manager.get_size_on_disk(model_name)
                 disk_mb = disk_size // (1024 * 1024)
-                status.update(f"🟢 Loaded in memory ({disk_mb} MB)")
+                size_label.update(f"{disk_mb} MB")
+            elif model_info:
+                size_label.update(f"~{model_info.size_mb} MB")
+
+            if model_status == ModelStatus.LOADED:
+                status.update("🟢 Loaded in memory")
                 status.add_class("-loaded")
                 status.remove_class("-downloaded", "-not-downloaded", "-loading")
             elif model_status == ModelStatus.LOADING:
@@ -183,9 +198,7 @@ class ModelManagerWidget(Static):
                 status.add_class("-loading")
                 status.remove_class("-downloaded", "-not-downloaded", "-loaded")
             elif model_status == ModelStatus.DOWNLOADED:
-                disk_size = manager.get_size_on_disk(model_name)
-                disk_mb = disk_size // (1024 * 1024)
-                status.update(f"✓ Downloaded ({disk_mb} MB)")
+                status.update("✓ Downloaded")
                 status.add_class("-downloaded")
                 status.remove_class("-not-downloaded", "-loaded", "-loading")
             else:
@@ -196,10 +209,23 @@ class ModelManagerWidget(Static):
             pass
 
     def _preload_model_if_downloaded(self, model_name: str) -> None:
-        """Preload model into memory if it's downloaded."""
+        """Preload model into memory if it's downloaded.
+        
+        Note: Preloading only works for MLX backend (macOS).
+        For CPU (faster-whisper), models are loaded on first transcription.
+        """
+        import sys
+        
         manager = get_model_manager()
 
         if not manager.is_downloaded(model_name):
+            return
+        
+        # Preload only available on macOS with MLX backend
+        backend = self._get_config("local_backend", "cpu")
+        if sys.platform != "darwin" or backend != "mlx":
+            # Just update status for CPU - no preload needed
+            self._update_model_info(model_name)
             return
 
         try:

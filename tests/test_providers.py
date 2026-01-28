@@ -700,7 +700,11 @@ class TestModelManager:
     def test_list_downloaded_empty(self, tmp_path):
         """Test listing downloaded models when none exist."""
         manager = ModelManager(models_dir=tmp_path)
-        downloaded = manager.list_downloaded()
+        
+        # Mock HuggingFace cache check to isolate test
+        with patch("soupawhisper.providers.models.Path.home") as mock_home:
+            mock_home.return_value = tmp_path / "fake_home"
+            downloaded = manager.list_downloaded()
 
         assert downloaded == []
 
@@ -725,16 +729,20 @@ class TestModelManager:
         """Test getting path to downloaded model."""
         manager = ModelManager(models_dir=tmp_path)
 
-        # Non-existent
-        assert manager.get_model_path("tiny") is None
+        # Mock HuggingFace cache check to isolate test
+        with patch("soupawhisper.providers.models.Path.home") as mock_home:
+            mock_home.return_value = tmp_path / "fake_home"
+            
+            # Non-existent
+            assert manager.get_model_path("tiny") is None
 
-        # Create fake model
-        model_dir = tmp_path / "tiny"
-        model_dir.mkdir()
-        (model_dir / "model.bin").write_bytes(b"fake")
+            # Create fake model
+            model_dir = tmp_path / "tiny"
+            model_dir.mkdir()
+            (model_dir / "model.bin").write_bytes(b"fake")
 
-        path = manager.get_model_path("tiny")
-        assert path == model_dir
+            path = manager.get_model_path("tiny")
+            assert path == model_dir
 
     def test_get_model_info(self, tmp_path):
         """Test getting model metadata."""
@@ -757,12 +765,16 @@ class TestModelManager:
         model_dir.mkdir()
         (model_dir / "model.bin").write_bytes(b"fake")
 
-        assert manager.is_downloaded("base") is True
+        # Mock HuggingFace cache check to isolate test
+        with patch("soupawhisper.providers.models.Path.home") as mock_home:
+            mock_home.return_value = tmp_path / "fake_home"
+            
+            assert manager.is_downloaded("base") is True
 
-        result = manager.delete("base")
+            result = manager.delete("base")
 
-        assert result is True
-        assert manager.is_downloaded("base") is False
+            assert result is True
+            assert manager.is_downloaded("base") is False
 
     def test_delete_nonexistent_model(self, tmp_path):
         """Test deleting non-existent model returns False."""
@@ -775,16 +787,20 @@ class TestModelManager:
         """Test getting model size on disk."""
         manager = ModelManager(models_dir=tmp_path)
 
-        # Non-existent
-        assert manager.get_size_on_disk("tiny") == 0
+        # Mock HuggingFace cache check to isolate test
+        with patch("soupawhisper.providers.models.Path.home") as mock_home:
+            mock_home.return_value = tmp_path / "fake_home"
+            
+            # Non-existent
+            assert manager.get_size_on_disk("tiny") == 0
 
-        # Create fake model with known size
-        model_dir = tmp_path / "tiny"
-        model_dir.mkdir()
-        (model_dir / "model.bin").write_bytes(b"x" * 1000)
+            # Create fake model with known size
+            model_dir = tmp_path / "tiny"
+            model_dir.mkdir()
+            (model_dir / "model.bin").write_bytes(b"x" * 1000)
 
-        size = manager.get_size_on_disk("tiny")
-        assert size == 1000
+            size = manager.get_size_on_disk("tiny")
+            assert size == 1000
 
     def test_get_model_manager_singleton(self):
         """Test get_model_manager returns singleton."""

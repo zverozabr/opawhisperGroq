@@ -150,7 +150,7 @@ class TestMLXInBackgroundThread:
                     self.exit()
         
         app = TestApp()
-        async with app.run_test() as pilot:
+        async with app.run_test() as _:
             # Wait for worker to complete
             await asyncio.sleep(30)
         

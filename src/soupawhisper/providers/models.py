@@ -211,6 +211,35 @@ class ModelManager:
                 downloaded.append(name)
         return downloaded
 
+    def _get_faster_whisper_cache_path(self, model_name: str) -> Path | None:
+        """Get path to faster-whisper model in HuggingFace cache.
+        
+        DRY: Single place to find faster-whisper cache location.
+        
+        Args:
+            model_name: Model name (e.g., "base", "turbo")
+            
+        Returns:
+            Path to cache directory, or None if not found
+        """
+        hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+        if not hf_cache.exists():
+            return None
+            
+        model_info = AVAILABLE_MODELS.get(model_name)
+        if not model_info or not model_info.faster_whisper_name:
+            return None
+        
+        # Check known faster-whisper model providers
+        providers = ["Systran", "guillaumekln"]
+        for provider in providers:
+            cache_name = f"models--{provider}--faster-whisper-{model_info.faster_whisper_name}"
+            cache_path = hf_cache / cache_name
+            if cache_path.exists() and cache_path.is_dir():
+                return cache_path
+        
+        return None
+
     def is_downloaded(self, model_name: str) -> bool:
         """Check if a model is downloaded.
 
@@ -220,11 +249,14 @@ class ModelManager:
         Returns:
             True if model is available locally
         """
+        # Check our models directory first (MLX models)
         model_path = self._models_dir / model_name
         if model_path.exists() and model_path.is_dir():
-            # Check if it has actual model files
-            return any(model_path.iterdir())
-        return False
+            if any(model_path.iterdir()):
+                return True
+        
+        # Check faster-whisper cache (DRY: uses helper method)
+        return self._get_faster_whisper_cache_path(model_name) is not None
 
     def get_model_path(self, model_name: str) -> Path | None:
         """Get path to downloaded model.
@@ -446,15 +478,23 @@ class ModelManager:
         Returns:
             Size in bytes, or 0 if not downloaded
         """
+        # Helper to calculate directory size (KISS)
+        def calc_dir_size(path: Path) -> int:
+            return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        
+        # Check our models directory first (MLX models)
         model_path = self._models_dir / model_name
-        if not model_path.exists():
-            return 0
+        if model_path.exists():
+            size = calc_dir_size(model_path)
+            if size > 0:
+                return size
 
-        total = 0
-        for f in model_path.rglob("*"):
-            if f.is_file():
-                total += f.stat().st_size
-        return total
+        # Check faster-whisper cache (DRY: uses helper method)
+        cache_path = self._get_faster_whisper_cache_path(model_name)
+        if cache_path:
+            return calc_dir_size(cache_path)
+        
+        return 0
 
     def list_models(self) -> list[ModelInfo]:
         """Get list of all available models.
@@ -477,18 +517,20 @@ class ModelManager:
         if not self.is_downloaded(model_name):
             return ModelStatus.NOT_DOWNLOADED
 
-        # Check if loaded in server
-        try:
-            from soupawhisper.providers.mlx import get_loaded_model
+        # Check if loaded in MLX server (macOS only)
+        import sys
+        if sys.platform == "darwin":
+            try:
+                from soupawhisper.providers.mlx import get_loaded_model
 
-            loaded_model = get_loaded_model()
-            if loaded_model:
-                # Check if this model is the loaded one
-                model_path = self._models_dir / model_name
-                if str(model_path) == loaded_model or model_name in loaded_model:
-                    return ModelStatus.LOADED
-        except ImportError:
-            pass
+                loaded_model = get_loaded_model()
+                if loaded_model:
+                    # Check if this model is the loaded one
+                    model_path = self._models_dir / model_name
+                    if str(model_path) == loaded_model or model_name in loaded_model:
+                        return ModelStatus.LOADED
+            except (ImportError, Exception):
+                pass
 
         return ModelStatus.DOWNLOADED
 

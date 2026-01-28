@@ -127,13 +127,17 @@ class TestLocalModelsDownload:
 
         with patch("soupawhisper.tui.widgets.model_manager.get_model_manager") as mock_get:
             # Setup mock manager with all required methods
-            mock_model_info = MagicMock()
-            mock_model_info.name = "base"
-            mock_model_info.size_mb = 142
+            mock_base = MagicMock()
+            mock_base.name = "base"
+            mock_base.size_mb = 142
+            
+            mock_turbo = MagicMock()
+            mock_turbo.name = "turbo"
+            mock_turbo.size_mb = 1600
 
             mock_manager = MagicMock()
-            mock_manager.list_multilingual.return_value = [mock_model_info]
-            mock_manager.get_model_info.return_value = mock_model_info
+            mock_manager.list_multilingual.return_value = [mock_base, mock_turbo]
+            mock_manager.get_model_info.return_value = mock_turbo
             mock_manager.is_downloaded.return_value = False
             mock_get.return_value = mock_manager
 
@@ -169,15 +173,19 @@ class TestLocalModelsStatus:
 
         with patch("soupawhisper.tui.widgets.model_manager.get_model_manager") as mock_get:
             # Setup mock manager with all required methods
-            mock_model_info = MagicMock()
-            mock_model_info.name = "base"
-            mock_model_info.size_mb = 142
+            mock_base = MagicMock()
+            mock_base.name = "base"
+            mock_base.size_mb = 142
+            
+            mock_turbo = MagicMock()
+            mock_turbo.name = "turbo"
+            mock_turbo.size_mb = 1600
 
             mock_manager = MagicMock()
-            mock_manager.list_multilingual.return_value = [mock_model_info]
-            mock_manager.get_model_info.return_value = mock_model_info
+            mock_manager.list_multilingual.return_value = [mock_base, mock_turbo]
+            mock_manager.get_model_info.return_value = mock_turbo
             mock_manager.is_downloaded.return_value = True
-            mock_manager.get_size_on_disk.return_value = 142 * 1024 * 1024
+            mock_manager.get_size_on_disk.return_value = 1600 * 1024 * 1024
             mock_get.return_value = mock_manager
 
             class TestApp(App):
@@ -219,13 +227,17 @@ class TestLocalModelsDelete:
 
         with patch("soupawhisper.tui.widgets.model_manager.get_model_manager") as mock_get:
             # Setup mock manager with all required methods
-            mock_model_info = MagicMock()
-            mock_model_info.name = "base"
-            mock_model_info.size_mb = 142
+            mock_base = MagicMock()
+            mock_base.name = "base"
+            mock_base.size_mb = 142
+            
+            mock_turbo = MagicMock()
+            mock_turbo.name = "turbo"
+            mock_turbo.size_mb = 1600
 
             mock_manager = MagicMock()
-            mock_manager.list_multilingual.return_value = [mock_model_info]
-            mock_manager.get_model_info.return_value = mock_model_info
+            mock_manager.list_multilingual.return_value = [mock_base, mock_turbo]
+            mock_manager.get_model_info.return_value = mock_turbo
             mock_manager.is_downloaded.return_value = True
             mock_manager.delete.return_value = True
             mock_get.return_value = mock_manager

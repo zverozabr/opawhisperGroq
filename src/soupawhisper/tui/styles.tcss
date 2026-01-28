@@ -3,25 +3,34 @@
 /* Main layout */
 Screen {
     layout: vertical;
+    width: 1fr;
 }
 
 /* TabbedContent must fill remaining space */
 TabbedContent {
+    width: 1fr;
     height: 1fr;
 }
 
-/* TabPane needs explicit height */
+/* TabPane needs explicit size */
 TabPane {
-    height: 100%;
+    width: 1fr;
+    height: 1fr;
 }
 
 /* ContentSwitcher inside TabbedContent */
 ContentSwitcher {
-    height: 100%;
+    width: 1fr;
+    height: 1fr;
+}
+
+/* Containers fill available space */
+Container {
+    width: 1fr;
 }
 
 #main {
-    width: 100%;
-    height: 100%;
+    width: 1fr;
+    height: 1fr;
     content-align: center middle;
 }

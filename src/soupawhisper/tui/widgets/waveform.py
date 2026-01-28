@@ -24,6 +24,7 @@ class WaveformWidget(Sparkline):
 
     DEFAULT_CSS = """
     WaveformWidget {
+        width: 1fr;
         height: 3;
         margin: 0 1;
         background: $surface;

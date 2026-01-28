@@ -28,18 +28,18 @@ class HistoryScreen(Container):
 
     DEFAULT_CSS = """
     HistoryScreen {
-        width: 100%;
-        height: 100%;
+        width: 1fr;
+        height: 1fr;
     }
 
     HistoryScreen DataTable {
-        width: 100%;
-        height: 100%;
+        width: 1fr;
+        height: 1fr;
     }
 
     HistoryScreen .empty-message {
-        width: 100%;
-        height: 100%;
+        width: 1fr;
+        height: 1fr;
         content-align: center middle;
         color: $text-muted;
     }
