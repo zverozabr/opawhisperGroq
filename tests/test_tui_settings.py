@@ -191,8 +191,8 @@ class TestSettingsScreenSections:
                 yield SettingsScreen(config=mock_config)
 
         async with TestApp().run_test() as pilot:
-            # Check for provider-related widgets
-            provider_select = pilot.app.query_one("#provider-select", Select)
+            # Check for provider-related widgets (ID from registry)
+            provider_select = pilot.app.query_one("#active-provider-select", Select)
             assert provider_select is not None
 
     @pytest.mark.asyncio

@@ -129,8 +129,8 @@ class TestTUIE2ESettingsWorkflow:
             await pilot.press("s")
             await pilot.pause()
 
-            # Check provider select has value
-            provider_select = pilot.app.query_one("#provider-select", Select)
+            # Check provider select has value (ID from registry)
+            provider_select = pilot.app.query_one("#active-provider-select", Select)
             assert provider_select.value == mock_config.active_provider
 
     @pytest.mark.asyncio

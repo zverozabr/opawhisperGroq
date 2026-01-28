@@ -14,6 +14,7 @@ from soupawhisper.storage import HistoryStorage
 from soupawhisper.tui.screens.history import HistoryScreen
 from soupawhisper.tui.screens.settings import SettingsScreen
 from soupawhisper.tui.widgets.status_bar import StatusBar
+from soupawhisper.tui.widgets.waveform import WaveformWidget
 from soupawhisper.tui.worker_controller import WorkerController
 
 log = get_logger()
@@ -52,6 +53,7 @@ class TUIApp(App):
         self._test_mode = test_mode
         self._worker_controller = None
         self._status_bar = None
+        self._waveform = None
         self._history_screen = None
         self._settings_screen = None
         self.config = Config.load()
@@ -62,6 +64,10 @@ class TUIApp(App):
         yield Header()
         self._status_bar = StatusBar(hotkey=self._format_hotkey())
         yield self._status_bar
+
+        # Waveform visualization (shows during recording)
+        self._waveform = WaveformWidget()
+        yield self._waveform
 
         self._history_screen = HistoryScreen(
             history_storage=self.history,
@@ -165,6 +171,13 @@ class TUIApp(App):
         """
         if self._status_bar:
             self._status_bar.is_recording = is_recording
+
+        # Update waveform visualization
+        if self._waveform:
+            if is_recording:
+                self._waveform.start_recording()
+            else:
+                self._waveform.stop_recording()
 
     def on_transcribing_changed(self, is_transcribing: bool) -> None:
         """Handle transcription state change.

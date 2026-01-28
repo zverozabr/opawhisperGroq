@@ -1,6 +1,7 @@
 """Settings screen for application configuration.
 
 Single Responsibility: Display and edit application settings.
+SOLID/OCP: Uses SettingsRegistry for declarative settings.
 """
 
 from typing import Callable, Optional
@@ -8,28 +9,43 @@ from typing import Callable, Optional
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Button, Input, Label, ProgressBar, Select, Static, Switch
 
-from soupawhisper.tui.widgets.hotkey_input import HotkeyInput
+from soupawhisper.tui.settings_registry import (
+    SETTINGS_REGISTRY,
+    create_widget_for_setting,
+    get_sections,
+    get_settings_by_section,
+)
 
 
-# DRY: Centralized field mappings for all widget types
-FIELD_MAPPINGS = {
-    # Select widgets
-    "provider-select": "active_provider",
-    "model-select": "model",
-    "language-select": "language",
-    "audio-device-select": "audio_device",
-    # Switch widgets
-    "auto-type": "auto_type",
-    "auto-enter": "auto_enter",
-    "debug-mode": "debug",
-    "notifications": "notifications",
-    # Input widgets
-    "api-key": "api_key",
-    "typing-delay": "typing_delay",
-}
+def get_model_manager():
+    """Get ModelManager instance.
 
-# Fields that need type conversion
-INT_FIELDS = {"typing_delay"}
+    Lazy import to avoid circular dependencies.
+    """
+    from soupawhisper.providers.models import get_model_manager as _get
+
+    return _get()
+
+
+# DRY: Build field mappings from registry
+def _build_field_mappings():
+    """Build field mappings from registry."""
+    mappings = {}
+    for setting in SETTINGS_REGISTRY:
+        if setting.widget_type == "select":
+            widget_id = f"{setting.key.replace('_', '-')}-select"
+        elif setting.widget_type == "hotkey":
+            widget_id = f"{setting.key.replace('_', '-')}-input"
+        else:
+            widget_id = setting.key.replace("_", "-")
+        mappings[widget_id] = setting.key
+    return mappings
+
+
+FIELD_MAPPINGS = _build_field_mappings()
+
+# Fields that need type conversion - from registry
+INT_FIELDS = {s.key for s in SETTINGS_REGISTRY if s.int_value}
 
 
 class SettingsScreen(VerticalScroll):
@@ -92,138 +108,43 @@ class SettingsScreen(VerticalScroll):
         self._on_save = on_save
 
     def compose(self):
-        """Create settings UI. KISS: Delegates to section methods."""
-        yield from self._compose_provider_section()
-        yield from self._compose_recording_section()
-        yield from self._compose_output_section()
-        yield from self._compose_advanced_section()
+        """Create settings UI.
+
+        OCP: Generates UI from SettingsRegistry.
+        Adding new settings only requires updating the registry.
+        """
+        # Generate sections from registry
+        for section in get_sections():
+            yield from self._compose_section_from_registry(section)
+
+        # Local Models is a special section (not in registry)
         yield from self._compose_local_models_section()
 
-    def _compose_provider_section(self):
-        """Compose provider settings section."""
+    def _compose_section_from_registry(self, section: str):
+        """Compose a section from registry settings.
+
+        OCP: New settings appear automatically.
+        """
+        settings = get_settings_by_section(section)
+        if not settings:
+            return
+
         with Container(classes="section"):
-            yield Static("Provider", classes="section-title")
+            yield Static(section, classes="section-title")
 
-            with Horizontal(classes="field-row"):
-                yield Label("Provider", classes="field-label")
-                yield Select(
-                    options=[
-                        ("Groq", "groq"),
-                        ("OpenAI", "openai"),
-                        ("Local (MLX)", "local-mlx"),
-                        ("Local (CPU)", "local-cpu"),
-                    ],
-                    value=self._get_config("active_provider", "groq"),
-                    id="provider-select",
-                    classes="field-input",
-                )
+            for setting in settings:
+                with Horizontal(classes="field-row"):
+                    yield Label(setting.label, classes="field-label")
+                    widget = create_widget_for_setting(
+                        setting,
+                        self.config,
+                        on_change=self._on_field_changed,
+                    )
+                    yield widget
 
-            with Horizontal(classes="field-row"):
-                yield Label("API Key", classes="field-label")
-                yield Input(
-                    value=self._get_config("api_key", ""),
-                    password=True,
-                    placeholder="Enter API key",
-                    id="api-key",
-                    classes="field-input",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Model", classes="field-label")
-                yield Select(
-                    options=[
-                        ("whisper-large-v3", "whisper-large-v3"),
-                        ("whisper-large-v3-turbo", "whisper-large-v3-turbo"),
-                    ],
-                    value=self._get_config("model", "whisper-large-v3"),
-                    id="model-select",
-                    classes="field-input",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Language", classes="field-label")
-                yield Select(
-                    options=[
-                        ("Auto-detect", "auto"),
-                        ("Russian", "ru"),
-                        ("English", "en"),
-                        ("German", "de"),
-                        ("French", "fr"),
-                        ("Spanish", "es"),
-                    ],
-                    value=self._get_config("language", "auto"),
-                    id="language-select",
-                    classes="field-input",
-                )
-
-    def _compose_recording_section(self):
-        """Compose recording settings section."""
-        with Container(classes="section"):
-            yield Static("Recording", classes="section-title")
-
-            with Horizontal(classes="field-row"):
-                yield Label("Hotkey", classes="field-label")
-                yield HotkeyInput(
-                    hotkey=self._get_config("hotkey", "ctrl_r"),
-                    on_change=lambda h: self._on_field_changed("hotkey", h),
-                    id="hotkey-input",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Audio Device", classes="field-label")
-                yield Select(
-                    options=self._get_audio_device_options(),
-                    value=self._get_config("audio_device", "default"),
-                    id="audio-device-select",
-                    classes="field-input",
-                )
-
-    def _compose_output_section(self):
-        """Compose output settings section."""
-        with Container(classes="section"):
-            yield Static("Output", classes="section-title")
-
-            with Horizontal(classes="field-row"):
-                yield Label("Auto-type", classes="field-label")
-                yield Switch(
-                    value=self._get_config("auto_type", True),
-                    id="auto-type",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Auto-enter", classes="field-label")
-                yield Switch(
-                    value=self._get_config("auto_enter", False),
-                    id="auto-enter",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Typing delay", classes="field-label")
-                yield Input(
-                    value=str(self._get_config("typing_delay", 12)),
-                    placeholder="ms",
-                    id="typing-delay",
-                    classes="field-input",
-                )
-
-    def _compose_advanced_section(self):
-        """Compose advanced settings section."""
-        with Container(classes="section"):
-            yield Static("Advanced", classes="section-title")
-
-            with Horizontal(classes="field-row"):
-                yield Label("Debug mode", classes="field-label")
-                yield Switch(
-                    value=self._get_config("debug", False),
-                    id="debug-mode",
-                )
-
-            with Horizontal(classes="field-row"):
-                yield Label("Notifications", classes="field-label")
-                yield Switch(
-                    value=self._get_config("notifications", True),
-                    id="notifications",
-                )
+    # NOTE: _compose_provider_section, _compose_recording_section,
+    # _compose_output_section, _compose_advanced_section removed.
+    # OCP: All these sections are now generated from SettingsRegistry.
 
     def _compose_local_models_section(self):
         """Compose local models settings section."""
@@ -328,21 +249,32 @@ class SettingsScreen(VerticalScroll):
             self._delete_model()
 
     def _download_model(self) -> None:
-        """Download the selected local model."""
+        """Download the selected local model using ModelManager."""
         model_select = self.query_one("#local-model-select", Select)
         status = self.query_one("#model-status", Static)
         progress = self.query_one("#download-progress", ProgressBar)
 
         model_name = str(model_select.value) if model_select.value else "base"
         status.update(f"Downloading {model_name}...")
-        progress.update(progress=0.5)
+        progress.update(progress=0.3)
 
-        # In production, would use ModelManager from providers.models
-        # For now, just update status
-        self.call_later(self._finish_download, model_name)
+        # Use ModelManager for real download
+        try:
+            manager = get_model_manager()
+            # Determine download method based on provider
+            provider = self._get_config("active_provider", "groq")
+            if provider == "local-mlx":
+                manager.download_for_mlx(model_name)
+            else:
+                manager.download_for_faster_whisper(model_name)
+
+            self._finish_download(model_name)
+        except Exception as e:
+            status.update(f"Error: {e}")
+            progress.update(progress=0)
 
     def _finish_download(self, model_name: str) -> None:
-        """Finish download simulation."""
+        """Finish download."""
         status = self.query_one("#model-status", Static)
         progress = self.query_one("#download-progress", ProgressBar)
 
@@ -350,17 +282,38 @@ class SettingsScreen(VerticalScroll):
         progress.update(progress=1.0)
 
     def _delete_model(self) -> None:
-        """Delete the selected local model."""
+        """Delete the selected local model using ModelManager."""
         model_select = self.query_one("#local-model-select", Select)
         status = self.query_one("#model-status", Static)
 
         model_name = str(model_select.value) if model_select.value else "base"
         status.update(f"Deleting {model_name}...")
 
-        # In production, would use ModelManager from providers.models
-        self.call_later(self._finish_delete, model_name)
+        # Use ModelManager for real delete
+        try:
+            manager = get_model_manager()
+            manager.delete(model_name)
+            self._finish_delete(model_name)
+        except Exception as e:
+            status.update(f"Error: {e}")
 
     def _finish_delete(self, model_name: str) -> None:
-        """Finish delete simulation."""
+        """Finish delete."""
         status = self.query_one("#model-status", Static)
         status.update("Not downloaded")
+
+    def _update_model_status(self) -> None:
+        """Update model status from ModelManager."""
+        try:
+            model_select = self.query_one("#local-model-select", Select)
+            status = self.query_one("#model-status", Static)
+
+            model_name = str(model_select.value) if model_select.value else "base"
+            manager = get_model_manager()
+
+            if manager.is_downloaded(model_name):
+                status.update(f"✓ {model_name} downloaded")
+            else:
+                status.update("Not downloaded")
+        except Exception:
+            pass  # Ignore errors during status update
