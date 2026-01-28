@@ -39,7 +39,7 @@ def create_backend(backend_type: str = "auto", typing_delay: int = 12) -> Displa
         return X11Backend(typing_delay=typing_delay)
     if backend_type == "wayland":
         from .wayland import WaylandBackend
-        return WaylandBackend()
+        return WaylandBackend(typing_delay=typing_delay)
     if backend_type == "darwin":
         from .darwin import DarwinBackend
         return DarwinBackend(typing_delay=typing_delay)

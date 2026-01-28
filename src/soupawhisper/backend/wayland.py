@@ -112,9 +112,18 @@ def _try_ydotool_paste() -> bool:
 
 
 class WaylandBackend:
-    """Wayland backend with smart fallbacks: wtype → ydotool → clipboard."""
+    """Wayland backend with smart fallbacks: wtype → ydotool → clipboard.
 
-    def __init__(self):
+    SOLID/LSP: Constructor signature matches other backends for substitutability.
+    """
+
+    def __init__(self, typing_delay: int = 12):
+        """Initialize Wayland backend.
+
+        Args:
+            typing_delay: Delay between key presses in ms (for future use).
+        """
+        self._typing_delay = typing_delay
         self._typing_method: TypingMethod | None = None
         self._stop_event = threading.Event()
 

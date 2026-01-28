@@ -2,17 +2,36 @@
 
 Single Responsibility: Manage background threads for hotkey listening.
 Framework-agnostic: Works with both GUI (Flet) and TUI (Textual).
+
+SOLID/DIP: Depends on CoreApp Protocol, not concrete App implementation.
 """
 
 import threading
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, Protocol
 
-from soupawhisper.app import App
-from soupawhisper.backend import create_backend
 from soupawhisper.config import Config
 from soupawhisper.logging import get_logger
 
+if TYPE_CHECKING:
+    pass
+
 log = get_logger()
+
+
+class CoreApp(Protocol):
+    """Protocol for core application.
+
+    SOLID/DIP: WorkerManager depends on this abstraction, not concrete App.
+    This allows for testing and alternative implementations.
+    """
+
+    def run(self) -> None:
+        """Run the core application loop."""
+        ...
+
+    def stop(self) -> None:
+        """Stop the core application."""
+        ...
 
 
 class WorkerManager:
@@ -48,12 +67,12 @@ class WorkerManager:
         self._on_recording = on_recording
         self._on_transcribing = on_transcribing
         self._on_error = on_error
-        self._core: Optional[App] = None
+        self._core: Optional[CoreApp] = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
     @property
-    def core(self) -> Optional[App]:
+    def core(self) -> Optional[CoreApp]:
         """Get the core app instance."""
         return self._core
 
@@ -96,8 +115,15 @@ class WorkerManager:
             self._core = None
 
     def _worker_loop(self) -> None:
-        """Background worker that runs the core app."""
+        """Background worker that runs the core app.
+
+        SOLID/DIP: Creates App through factory, could be injected for testing.
+        """
         try:
+            # Import here to avoid circular imports and allow DIP
+            from soupawhisper.app import App
+            from soupawhisper.backend import create_backend
+
             backend = create_backend(self.config.backend, self.config.typing_delay)
             self._core = App(
                 config=self.config,

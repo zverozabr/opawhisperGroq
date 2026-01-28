@@ -1,45 +1,11 @@
 """Tests for TUIApp.
 
 TDD: Tests written BEFORE implementation.
+Fixtures: mock_config, tui_app_patched from conftest.py
 """
 
-from unittest.mock import MagicMock, patch
-
 import pytest
-from textual.widgets import TabbedContent, TabPane, Footer, Header
-
-
-@pytest.fixture
-def mock_config():
-    """Create mock config for testing."""
-    config = MagicMock()
-    config.hotkey = "ctrl_r"
-    config.history_days = 3
-    config.history_enabled = True
-    config.debug = False
-    config.api_key = "test_key"
-    config.active_provider = "groq"
-    config.model = "whisper-large-v3"
-    config.language = "auto"
-    config.auto_type = True
-    config.auto_enter = False
-    config.typing_delay = 12
-    config.notifications = True
-    config.backend = "auto"
-    config.audio_device = "default"
-    return config
-
-
-@pytest.fixture
-def tui_app_patched(mock_config):
-    """Create patched TUIApp for testing."""
-    with patch("soupawhisper.tui.app.Config.load", return_value=mock_config):
-        with patch("soupawhisper.tui.app.HistoryStorage") as mock_history:
-            with patch("soupawhisper.tui.app.WorkerManager"):
-                mock_history.return_value.get_recent.return_value = []
-                from soupawhisper.tui.app import TUIApp
-                app = TUIApp(test_mode=True)
-                yield app
+from textual.widgets import Footer, Header, TabbedContent, TabPane
 
 
 class TestTUIAppCompose:

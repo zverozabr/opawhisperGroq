@@ -53,8 +53,8 @@ class TestWorkerManagerInit:
 class TestWorkerManagerStart:
     """Test WorkerManager start/stop."""
 
-    @patch("soupawhisper.worker.create_backend")
-    @patch("soupawhisper.worker.App")
+    @patch("soupawhisper.backend.create_backend")
+    @patch("soupawhisper.app.App")
     def test_start_creates_thread(self, mock_app_class, mock_create_backend, mock_config):
         """start() creates a daemon thread."""
         worker = WorkerManager(mock_config)
@@ -74,8 +74,8 @@ class TestWorkerManagerStart:
         # Cleanup
         worker.stop()
 
-    @patch("soupawhisper.worker.create_backend")
-    @patch("soupawhisper.worker.App")
+    @patch("soupawhisper.backend.create_backend")
+    @patch("soupawhisper.app.App")
     def test_start_with_runner(self, mock_app_class, mock_create_backend, mock_config):
         """start_with_runner() uses provided thread runner."""
         worker = WorkerManager(mock_config)
@@ -111,8 +111,8 @@ class TestWorkerManagerStop:
 
         assert not worker.is_running
 
-    @patch("soupawhisper.worker.create_backend")
-    @patch("soupawhisper.worker.App")
+    @patch("soupawhisper.backend.create_backend")
+    @patch("soupawhisper.app.App")
     def test_stop_calls_core_stop(self, mock_app_class, mock_create_backend, mock_config):
         """stop() calls core.stop() if core exists."""
         worker = WorkerManager(mock_config)
@@ -130,8 +130,8 @@ class TestWorkerManagerStop:
 class TestWorkerManagerCallbacks:
     """Test WorkerManager callback handling."""
 
-    @patch("soupawhisper.worker.create_backend")
-    @patch("soupawhisper.worker.App")
+    @patch("soupawhisper.backend.create_backend")
+    @patch("soupawhisper.app.App")
     def test_callbacks_passed_to_app(self, mock_app_class, mock_create_backend, mock_config):
         """Callbacks are passed to App instance."""
         on_recording = MagicMock()
@@ -159,8 +159,8 @@ class TestWorkerManagerCallbacks:
         assert call_kwargs["on_transcription"] == on_transcription
         assert call_kwargs["on_transcribing"] == on_transcribing
 
-    @patch("soupawhisper.worker.create_backend")
-    @patch("soupawhisper.worker.App")
+    @patch("soupawhisper.backend.create_backend")
+    @patch("soupawhisper.app.App")
     def test_error_callback_on_exception(self, mock_app_class, mock_create_backend, mock_config):
         """on_error callback called when exception occurs."""
         on_error = MagicMock()

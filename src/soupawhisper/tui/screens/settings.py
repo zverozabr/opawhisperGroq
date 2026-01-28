@@ -11,6 +11,27 @@ from textual.widgets import Button, Input, Label, ProgressBar, Select, Static, S
 from soupawhisper.tui.widgets.hotkey_input import HotkeyInput
 
 
+# DRY: Centralized field mappings for all widget types
+FIELD_MAPPINGS = {
+    # Select widgets
+    "provider-select": "active_provider",
+    "model-select": "model",
+    "language-select": "language",
+    "audio-device-select": "audio_device",
+    # Switch widgets
+    "auto-type": "auto_type",
+    "auto-enter": "auto_enter",
+    "debug-mode": "debug",
+    "notifications": "notifications",
+    # Input widgets
+    "api-key": "api_key",
+    "typing-delay": "typing_delay",
+}
+
+# Fields that need type conversion
+INT_FIELDS = {"typing_delay"}
+
+
 class SettingsScreen(VerticalScroll):
     """Screen for editing application settings.
 
@@ -71,8 +92,15 @@ class SettingsScreen(VerticalScroll):
         self._on_save = on_save
 
     def compose(self):
-        """Create settings UI."""
-        # Provider section
+        """Create settings UI. KISS: Delegates to section methods."""
+        yield from self._compose_provider_section()
+        yield from self._compose_recording_section()
+        yield from self._compose_output_section()
+        yield from self._compose_advanced_section()
+        yield from self._compose_local_models_section()
+
+    def _compose_provider_section(self):
+        """Compose provider settings section."""
         with Container(classes="section"):
             yield Static("Provider", classes="section-title")
 
@@ -128,7 +156,8 @@ class SettingsScreen(VerticalScroll):
                     classes="field-input",
                 )
 
-        # Recording section
+    def _compose_recording_section(self):
+        """Compose recording settings section."""
         with Container(classes="section"):
             yield Static("Recording", classes="section-title")
 
@@ -149,7 +178,8 @@ class SettingsScreen(VerticalScroll):
                     classes="field-input",
                 )
 
-        # Output section
+    def _compose_output_section(self):
+        """Compose output settings section."""
         with Container(classes="section"):
             yield Static("Output", classes="section-title")
 
@@ -176,7 +206,8 @@ class SettingsScreen(VerticalScroll):
                     classes="field-input",
                 )
 
-        # Advanced section
+    def _compose_advanced_section(self):
+        """Compose advanced settings section."""
         with Container(classes="section"):
             yield Static("Advanced", classes="section-title")
 
@@ -194,7 +225,8 @@ class SettingsScreen(VerticalScroll):
                     id="notifications",
                 )
 
-        # Local Models section
+    def _compose_local_models_section(self):
+        """Compose local models settings section."""
         with Container(classes="section"):
             yield Static("Local Models", classes="section-title")
 
@@ -263,43 +295,30 @@ class SettingsScreen(VerticalScroll):
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle Select widget changes."""
-        field_map = {
-            "provider-select": "active_provider",
-            "model-select": "model",
-            "language-select": "language",
-            "audio-device-select": "audio_device",
-        }
-        field_name = field_map.get(event.select.id)
+        field_name = FIELD_MAPPINGS.get(event.select.id)
         if field_name:
             self._on_field_changed(field_name, event.value)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle Switch widget changes."""
-        field_map = {
-            "auto-type": "auto_type",
-            "auto-enter": "auto_enter",
-            "debug-mode": "debug",
-            "notifications": "notifications",
-        }
-        field_name = field_map.get(event.switch.id)
+        field_name = FIELD_MAPPINGS.get(event.switch.id)
         if field_name:
             self._on_field_changed(field_name, event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Input widget submission (Enter key)."""
-        field_map = {
-            "api-key": "api_key",
-            "typing-delay": "typing_delay",
-        }
-        field_name = field_map.get(event.input.id)
-        if field_name:
-            value = event.value
-            if field_name == "typing_delay":
-                try:
-                    value = int(value)
-                except ValueError:
-                    return
-            self._on_field_changed(field_name, value)
+        field_name = FIELD_MAPPINGS.get(event.input.id)
+        if not field_name:
+            return
+
+        value = event.value
+        if field_name in INT_FIELDS:
+            try:
+                value = int(value)
+            except ValueError:
+                return
+
+        self._on_field_changed(field_name, value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

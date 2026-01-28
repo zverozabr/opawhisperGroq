@@ -1,8 +1,8 @@
 """Main TUI application using Textual.
 
 SOLID principles applied:
-- Single Responsibility: TUIApp handles only UI, WorkerManager handles background work.
-- Dependency Inversion: WorkerManager injected with callbacks.
+- Single Responsibility: TUIApp handles UI, WorkerController handles worker lifecycle.
+- Dependency Inversion: WorkerController injected with callbacks.
 """
 
 from textual.app import App, ComposeResult
@@ -14,7 +14,7 @@ from soupawhisper.storage import HistoryStorage
 from soupawhisper.tui.screens.history import HistoryScreen
 from soupawhisper.tui.screens.settings import SettingsScreen
 from soupawhisper.tui.widgets.status_bar import StatusBar
-from soupawhisper.worker import WorkerManager
+from soupawhisper.tui.worker_controller import WorkerController
 
 log = get_logger()
 
@@ -50,7 +50,7 @@ class TUIApp(App):
         """
         super().__init__()
         self._test_mode = test_mode
-        self._worker = None
+        self._worker_controller = None
         self._status_bar = None
         self._history_screen = None
         self._settings_screen = None
@@ -86,32 +86,19 @@ class TUIApp(App):
             self._start_worker()
 
     def _start_worker(self) -> None:
-        """Start background worker for hotkey listening."""
-        self._worker = WorkerManager(
+        """Start background worker for hotkey listening.
+
+        SRP: Worker lifecycle delegated to WorkerController.
+        """
+        self._worker_controller = WorkerController(
             config=self.config,
-            on_transcription=self._on_transcription_wrapper,
-            on_recording=self._on_recording_wrapper,
-            on_transcribing=self._on_transcribing_wrapper,
-            on_error=self._on_error_wrapper,
+            call_from_thread=self.call_from_thread,
+            on_recording=self.on_recording_changed,
+            on_transcribing=self.on_transcribing_changed,
+            on_transcription=self.on_transcription_complete,
+            on_error=self.on_error,
         )
-        self._worker.start()
-        log.info("Worker started")
-
-    def _on_recording_wrapper(self, is_recording: bool) -> None:
-        """Thread-safe wrapper for recording callback."""
-        self.call_from_thread(self.on_recording_changed, is_recording)
-
-    def _on_transcribing_wrapper(self, is_transcribing: bool) -> None:
-        """Thread-safe wrapper for transcribing callback."""
-        self.call_from_thread(self.on_transcribing_changed, is_transcribing)
-
-    def _on_transcription_wrapper(self, text: str, language: str) -> None:
-        """Thread-safe wrapper for transcription callback."""
-        self.call_from_thread(self.on_transcription_complete, text, language)
-
-    def _on_error_wrapper(self, message: str) -> None:
-        """Thread-safe wrapper for error callback."""
-        self.call_from_thread(self.on_error, message)
+        self._worker_controller.start()
 
     def _format_hotkey(self) -> str:
         """Format hotkey for display."""
@@ -121,8 +108,8 @@ class TUIApp(App):
 
     def action_quit(self) -> None:
         """Quit the application."""
-        if self._worker:
-            self._worker.stop()
+        if self._worker_controller:
+            self._worker_controller.stop()
         self.exit()
 
     def action_switch_to_history(self) -> None:
@@ -166,9 +153,8 @@ class TUIApp(App):
 
     def _restart_worker(self) -> None:
         """Restart the background worker."""
-        if self._worker:
-            self._worker.stop()
-        self._start_worker()
+        if hasattr(self, "_worker_controller") and self._worker_controller:
+            self._worker_controller.restart()
 
     # UI Event handlers (called from WorkerManager)
     def on_recording_changed(self, is_recording: bool) -> None:

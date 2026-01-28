@@ -75,9 +75,15 @@ class HotkeyInput(Horizontal):
 
     def _parse_hotkey(self, hotkey: str) -> None:
         """Parse hotkey string into modifier and key parts."""
+        # Handle empty or invalid hotkey
+        if not hotkey or hotkey == "+":
+            self._modifier = "ctrl_r"
+            self._key = ""
+            return
+
         if "+" in hotkey:
             parts = hotkey.split("+")
-            self._modifier = parts[0]
+            self._modifier = parts[0] if parts[0] else "ctrl_r"
             self._key = parts[1] if len(parts) > 1 else ""
         else:
             # Check if it's a modifier or a key
