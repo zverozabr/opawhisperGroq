@@ -12,7 +12,7 @@ Voice dictation tool using Groq Whisper API.
 
 - Python 3.11+
 - UV package manager
-- Flet (GUI framework)
+- **Textual** (TUI framework)
 - pynput (keyboard listener - X11/macOS/Windows)
 - evdev (keyboard listener - Wayland only)
 - requests (HTTP client)
@@ -26,10 +26,11 @@ __main__.py  →  App  →  AudioRecorder  →  TranscriptionHandler  →  backe
                         (arecord/                              Darwin/Windows
                          sox/ffmpeg)
 
-GUI Mode:
-__main__.py --gui  →  GUIApp  →  HistoryTab / SettingsTab
-                         ↓              ↓
-                       TrayIcon    HistoryStorage
+TUI Mode (default):
+__main__.py  →  TUIApp  →  WorkerController  →  WorkerManager  →  App
+                  ↓              ↓
+            HistoryScreen   SettingsScreen
+            WaveformWidget  StatusBar
 ```
 
 ## Directory Structure
@@ -62,14 +63,28 @@ src/soupawhisper/
 │   ├── history.py        # HistoryStorage - transcription history
 │   └── debug.py          # DebugStorage - save recordings for debug
 │
-└── gui/                  # Flet GUI
+├── tui/                  # Textual TUI
+│   ├── __init__.py
+│   ├── app.py            # TUIApp controller
+│   ├── settings_registry.py  # Declarative settings (OCP)
+│   ├── worker_controller.py  # Worker lifecycle (SRP)
+│   ├── screens/
+│   │   ├── history.py    # History browser
+│   │   └── settings.py   # Settings editor
+│   └── widgets/
+│       ├── status_bar.py # Status display
+│       ├── waveform.py   # Audio visualization (Sparkline)
+│       └── hotkey_input.py # Hotkey selector
+│
+├── worker.py             # Background worker manager
+│
+└── providers/            # Transcription providers
     ├── __init__.py
-    ├── app.py            # GUIApp controller
-    ├── components.py     # EditableField, SettingsSection
-    ├── history_tab.py    # History display
-    ├── settings_tab.py   # Settings form
-    ├── tray.py           # System tray (pystray)
-    └── assets/           # Icons
+    ├── models.py         # ModelManager for local models
+    ├── groq.py           # Groq API provider
+    ├── openai.py         # OpenAI API provider
+    ├── mlx.py            # MLX local provider (macOS)
+    └── faster_whisper.py # Faster-whisper local provider
 ```
 
 ## Platform Support
@@ -106,21 +121,26 @@ Groq Whisper API:
 | Class | File | Purpose |
 |-------|------|---------|
 | `App` | app.py | Orchestrates hotkey → record → transcribe |
+| `TUIApp` | tui/app.py | Textual TUI controller |
+| `WorkerController` | tui/worker_controller.py | Worker lifecycle (SRP) |
+| `WorkerManager` | worker.py | Background thread manager |
+| `SettingsRegistry` | tui/settings_registry.py | Declarative settings (OCP) |
+| `WaveformWidget` | tui/widgets/waveform.py | Audio level visualization |
+| `ModelManager` | providers/models.py | Local model download/delete |
 | `TranscriptionHandler` | transcription_handler.py | Handles API call, clipboard, typing, debug |
 | `AudioRecorder` | audio.py | Platform-specific audio capture |
 | `PynputHotkeyListener` | backend/pynput_listener.py | Shared hotkey listener |
-| `GUIApp` | gui/app.py | Flet GUI controller |
 | `HistoryStorage` | storage/history.py | Markdown-based history |
 | `DebugStorage` | storage/debug.py | Save recordings for debugging |
 
 ## Run
 
 ```bash
-# CLI mode
+# TUI mode (default)
 uv run soupawhisper
 
-# GUI mode
-uv run soupawhisper --gui
+# Headless mode (no UI)
+uv run soupawhisper --headless
 
 # With debug logging
 uv run soupawhisper --debug
@@ -129,15 +149,28 @@ uv run soupawhisper --debug
 ## Testing
 
 ```bash
-# All tests
+# All tests (415 tests)
 uv run pytest -v
 
-# Skip E2E tests
-uv run pytest -v --ignore=tests/test_playwright_e2e.py --ignore=tests/test_gui_e2e.py
+# Run specific test file
+uv run pytest tests/test_tui_app.py -v
 
 # Linting
 uv tool run ruff check src/ tests/
 ```
+
+## SOLID/DRY/KISS/TDD
+
+Project follows these principles:
+
+- **SRP**: `WorkerController` handles worker lifecycle, `TUIApp` handles UI
+- **OCP**: `SettingsRegistry` - add settings without modifying `SettingsScreen`
+- **LSP**: All backends implement `DisplayBackend` protocol with same signature
+- **ISP**: Small protocols in `ui_events.py`
+- **DIP**: `CoreApp` protocol for `WorkerManager`
+- **DRY**: Shared fixtures in `conftest.py`, `FIELD_MAPPINGS`
+- **KISS**: Settings compose split into section methods
+- **TDD**: Tests written before implementation
 
 ## CI/CD
 

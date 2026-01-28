@@ -12,6 +12,8 @@ Voice dictation tool using Groq Whisper API.
 - Auto-types text into active window
 - Copies to clipboard
 - **TUI mode** — terminal interface with history and settings
+- **Waveform visualization** — real-time audio level display during recording
+- **Local model management** — download/delete models from UI
 - **Platform-aware UI** — Command/Option on macOS, Ctrl/Alt on Linux/Windows
 - Smart audio device selection with auto-reconnect
 - Debug mode — save recordings for troubleshooting
@@ -119,11 +121,19 @@ uv run soupawhisper
 
 Terminal interface with tabs for History and Settings.
 
+**Features:**
+- Real-time waveform visualization during recording
+- History browser with vim-style navigation
+- Settings editor with live updates
+- Local model management (download/delete)
+
 **Keybindings:**
 - `q` — Quit
 - `h` — History tab
 - `s` — Settings tab
 - `c` — Copy selected transcription
+- `j/k` — Navigate history (vim-style)
+- `g/G` — Jump to top/bottom
 - `Tab` / `Shift+Tab` — Navigate fields
 
 ### Headless Mode (CLI only)
@@ -178,17 +188,44 @@ Files saved to `~/.cache/soupawhisper/debug/`:
 ## Development
 
 ```bash
-# Run tests
+# Run tests (415 tests)
 uv run pytest -v
-
-# Skip E2E tests
-uv run pytest -v --ignore=tests/test_playwright_e2e.py --ignore=tests/test_gui_e2e.py
 
 # Run linting
 uv tool run ruff check src/ tests/
 
 # Run with debug logging
 uv run soupawhisper --debug
+```
+
+### Architecture
+
+The project follows SOLID, DRY, KISS principles:
+
+- **TUI** — Textual-based terminal interface
+- **WorkerController** — Manages background hotkey listener (SRP)
+- **SettingsRegistry** — Declarative settings system (OCP)
+- **CoreApp Protocol** — Abstraction for worker (DIP)
+
+```
+src/soupawhisper/
+├── tui/                    # Terminal UI (Textual)
+│   ├── app.py              # TUIApp - main controller
+│   ├── settings_registry.py # Declarative settings (OCP)
+│   ├── worker_controller.py # Worker lifecycle (SRP)
+│   ├── screens/
+│   │   ├── history.py      # History browser
+│   │   └── settings.py     # Settings editor
+│   └── widgets/
+│       ├── status_bar.py   # Status display
+│       ├── waveform.py     # Audio visualization
+│       └── hotkey_input.py # Hotkey selector
+├── worker.py               # Background worker manager
+├── providers/              # Transcription providers
+│   ├── models.py           # ModelManager for local models
+│   ├── mlx.py              # MLX provider (macOS)
+│   └── faster_whisper.py   # Faster-whisper provider
+└── backend/                # Platform backends
 ```
 
 ## License
