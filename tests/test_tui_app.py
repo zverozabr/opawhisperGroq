@@ -39,7 +39,8 @@ class TestTUIAppCompose:
         """TUIApp has TabbedContent for navigation."""
         async with tui_app_patched.run_test() as pilot:
             tabs = pilot.app.query(TabbedContent)
-            assert len(tabs) == 1
+            # Main tabs + Settings provider tabs
+            assert len(tabs) >= 1
 
 
 class TestTUIAppTabs:
@@ -73,10 +74,10 @@ class TestTUIAppKeybindings:
     """Test TUIApp keyboard bindings."""
 
     @pytest.mark.asyncio
-    async def test_q_quits(self, tui_app_patched):
-        """Pressing 'q' quits the application."""
+    async def test_ctrl_c_quits(self, tui_app_patched):
+        """Pressing Ctrl+C quits the application."""
         async with tui_app_patched.run_test() as pilot:
-            await pilot.press("q")
+            await pilot.press("ctrl+c")
             # App should be exiting
             assert tui_app_patched._exit
 

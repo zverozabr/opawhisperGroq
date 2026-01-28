@@ -6,12 +6,11 @@ import os
 import signal
 import subprocess
 import time
-from pathlib import Path
+
+from soupawhisper.constants import LOCK_FILE, ensure_dir
 
 # Use basic logging here as setup_logging may not be called yet
 log = logging.getLogger("soupawhisper")
-
-LOCK_FILE = Path.home() / ".cache" / "soupawhisper.lock"
 
 
 def _kill_process_tree(pid: int) -> None:
@@ -41,7 +40,7 @@ def acquire_lock() -> bool:
 
     Returns True if lock acquired successfully.
     """
-    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(LOCK_FILE.parent)
 
     if LOCK_FILE.exists():
         try:

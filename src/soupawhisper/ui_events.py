@@ -2,7 +2,7 @@
 
 SOLID - Interface Segregation:
 Small, focused protocols for UI event callbacks.
-Shared by both GUI (Flet) and TUI (Textual) implementations.
+Used by TUI (Textual) implementation.
 """
 
 from typing import Protocol, runtime_checkable

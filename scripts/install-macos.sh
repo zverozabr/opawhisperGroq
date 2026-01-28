@@ -9,7 +9,7 @@ APP_NAME="SoupaWhisper"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="$HOME/Applications/${APP_NAME}.app"
-ICON_SRC="$PROJECT_DIR/src/soupawhisper/gui/assets/microphone.png"
+ICON_SRC="$PROJECT_DIR/data/icons/soupawhisper.png"
 
 echo "Installing ${APP_NAME}.app..."
 
@@ -47,11 +47,11 @@ cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
 </plist>
 EOF
 
-# Create launcher script
+# Create launcher script (TUI mode in terminal)
 cat > "$APP_DIR/Contents/MacOS/launcher" << EOF
 #!/bin/bash
 cd "$PROJECT_DIR"
-exec uv run soupawhisper --gui
+exec uv run soupawhisper
 EOF
 chmod +x "$APP_DIR/Contents/MacOS/launcher"
 

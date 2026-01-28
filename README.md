@@ -30,13 +30,22 @@ sudo apt install alsa-utils xclip xdotool  # Debian/Ubuntu
 
 ### Linux (Wayland)
 ```bash
-sudo pacman -S alsa-utils wl-clipboard wtype  # Arch
-sudo apt install alsa-utils wl-clipboard wtype  # Debian/Ubuntu
+# Required
+sudo pacman -S alsa-utils wl-clipboard  # Arch
+sudo apt install alsa-utils wl-clipboard  # Debian/Ubuntu
 
-# For hotkey support (add user to input group)
+# Optional - for auto-typing (choose one):
+yay -S wtype                    # Arch (AUR) - recommended, best Unicode support
+sudo pacman -S ydotool          # Arch - alternative, needs ydotoold service
+
+# For hotkey support (required - add user to input group)
 sudo usermod -aG input $USER
-# Re-login required
+# Re-login required after this!
 ```
+
+**Note:** If no typing tool is installed, text is copied to clipboard only — paste with Ctrl+V.
+
+**KDE Wayland:** Virtual keyboard is blocked by security policy. Use clipboard mode.
 
 ### macOS
 ```bash
@@ -121,6 +130,11 @@ uv run soupawhisper
 
 Terminal interface with tabs for History and Settings.
 
+**Terminal Requirements:**
+- Use a full-featured terminal: Terminal.app, iTerm2, Alacritty, Kitty
+- IDE integrated terminals (Cursor, VS Code) may not render correctly
+- Requires TERM with escape sequence support (xterm-256color recommended)
+
 **Features:**
 - Real-time waveform visualization during recording
 - History browser with vim-style navigation
@@ -171,6 +185,46 @@ If text is not being typed, check permissions:
 
 The GUI shows permission status and has a "Fix" button to help configure.
 
+## Troubleshooting
+
+### Arch Linux / Wayland
+
+**"No keyboard devices found"**
+```bash
+# Add user to input group
+sudo usermod -aG input $USER
+# Re-login or reboot
+```
+
+**Hotkey not working**
+- Check you're in `input` group: `groups | grep input`
+- Check keyboard devices exist: `ls /dev/input/event*`
+- Try running with `sudo` to test permissions
+
+**Text not typing (Wayland)**
+- Install `wtype` (AUR) or `ydotool`
+- For ydotool, start the daemon: `sudo systemctl enable --now ydotool`
+- KDE Wayland blocks virtual input — use clipboard mode (Ctrl+V)
+
+**No sound / microphone not working**
+```bash
+# List available devices
+arecord -l
+
+# Test recording
+arecord -d 3 test.wav && aplay test.wav
+```
+
+### macOS
+
+**"Text not typing"**
+1. System Settings → Privacy & Security → Accessibility
+2. Add your terminal app (Terminal.app, iTerm2) or the running application
+3. Also add to Input Monitoring
+
+**"Permission denied" errors**
+- Grant microphone access in System Settings → Privacy & Security → Microphone
+
 ## Debug Mode
 
 Enable debug mode to save the last 3 recordings:
@@ -188,7 +242,7 @@ Files saved to `~/.cache/soupawhisper/debug/`:
 ## Development
 
 ```bash
-# Run tests (415 tests)
+# Run tests (480+ tests)
 uv run pytest -v
 
 # Run linting

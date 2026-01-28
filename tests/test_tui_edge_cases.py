@@ -21,6 +21,7 @@ class TestHistoryScreenEdgeCases:
         screen._table = None
         # Should not raise
         screen.copy_selected()
+        assert screen._table is None
 
     @pytest.mark.asyncio
     async def test_copy_selected_with_empty_entries(self):
@@ -36,6 +37,7 @@ class TestHistoryScreenEdgeCases:
             screen._entries = []
             # Should not raise
             screen.copy_selected()
+            assert screen._entries == []
 
     @pytest.mark.asyncio
     async def test_refresh_data_with_none_storage(self):
@@ -99,6 +101,7 @@ class TestSettingsScreenEdgeCases:
         screen = SettingsScreen(config=MagicMock(), on_save=None)
         # Should not raise
         screen._on_field_changed("test_field", "test_value")
+        assert screen._on_save is None
 
 
 class TestStatusBarEdgeCases:
@@ -165,6 +168,7 @@ class TestWorkerControllerEdgeCases:
         )
         # Should not raise
         controller.stop()
+        assert controller._worker is None
 
 
 class TestHotkeyInputEdgeCases:

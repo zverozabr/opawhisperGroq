@@ -74,21 +74,6 @@ class TestWorkerManagerStart:
         # Cleanup
         worker.stop()
 
-    @patch("soupawhisper.backend.create_backend")
-    @patch("soupawhisper.app.App")
-    def test_start_with_runner(self, mock_app_class, mock_create_backend, mock_config):
-        """start_with_runner() uses provided thread runner."""
-        worker = WorkerManager(mock_config)
-
-        mock_runner = MagicMock()
-        worker.start_with_runner(mock_runner)
-
-        assert worker.is_running
-        mock_runner.assert_called_once()
-
-        # Cleanup
-        worker.stop()
-
     def test_start_twice_warns(self, mock_config):
         """Starting twice logs warning."""
         worker = WorkerManager(mock_config)
@@ -186,7 +171,7 @@ class TestUIEventsProtocol:
 
         class MyHandler:
             def on_recording_changed(self, is_recording: bool) -> None:
-                pass
+                return None
 
         handler = MyHandler()
         assert isinstance(handler, RecordingHandler)
@@ -197,10 +182,10 @@ class TestUIEventsProtocol:
 
         class MyHandler:
             def on_transcription_complete(self, text: str, language: str) -> None:
-                pass
+                return None
 
             def on_transcribing_changed(self, is_transcribing: bool) -> None:
-                pass
+                return None
 
         handler = MyHandler()
         assert isinstance(handler, TranscriptionHandler)
@@ -211,16 +196,16 @@ class TestUIEventsProtocol:
 
         class MyHandler:
             def on_recording_changed(self, is_recording: bool) -> None:
-                pass
+                return None
 
             def on_transcription_complete(self, text: str, language: str) -> None:
-                pass
+                return None
 
             def on_transcribing_changed(self, is_transcribing: bool) -> None:
-                pass
+                return None
 
             def on_error(self, message: str) -> None:
-                pass
+                return None
 
         handler = MyHandler()
         assert isinstance(handler, UIEventHandler)

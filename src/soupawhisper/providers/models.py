@@ -5,14 +5,51 @@ Handles downloading, caching, and managing Whisper models.
 
 import logging
 import shutil
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, Optional
+
+from soupawhisper.constants import MODELS_DIR, ensure_dir
+
+if TYPE_CHECKING:
+    from soupawhisper.providers.model_preloader import ModelPreloader
 
 logger = logging.getLogger(__name__)
 
-# Default models directory
-MODELS_DIR = Path.home() / ".config" / "soupawhisper" / "models"
+
+class ModelStatus(Enum):
+    """Status of a local model."""
+
+    NOT_DOWNLOADED = "not_downloaded"  # Model not on disk
+    DOWNLOADED = "downloaded"  # On disk but not in memory
+    LOADING = "loading"  # Currently loading into memory
+    LOADED = "loaded"  # In memory, ready for instant use
+
+
+class ModelNotDownloadedError(Exception):
+    """Raised when trying to preload a model that's not downloaded."""
+
+    pass
+
+
+class ModelStatusFormatter:
+    """Format model status for display."""
+
+    @staticmethod
+    def format_status(
+        status: ModelStatus, model_name: str, manager: "ModelManager"
+    ) -> str:
+        if status == ModelStatus.LOADED:
+            disk_mb = manager.get_size_on_disk(model_name) // (1024 * 1024)
+            return f"Loaded in memory ({disk_mb} MB)"
+        if status == ModelStatus.LOADING:
+            return "Loading into memory..."
+        if status == ModelStatus.DOWNLOADED:
+            disk_mb = manager.get_size_on_disk(model_name) // (1024 * 1024)
+            return f"Downloaded ({disk_mb} MB)"
+        return "Not downloaded"
 
 
 @dataclass
@@ -28,67 +65,118 @@ class ModelInfo:
     faster_whisper_name: str | None = None
 
 
-# Available models with metadata
+@dataclass
+class DownloadProgress:
+    """Progress information for model download."""
+
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    speed_mbps: float = 0.0
+    eta_seconds: float = 0.0
+    percent: float = 0.0
+
+    def __post_init__(self):
+        if self.total_bytes > 0:
+            self.percent = (self.downloaded_bytes / self.total_bytes) * 100
+
+
+@dataclass
+class DownloadResult:
+    """Result of model download with metrics."""
+
+    model_name: str
+    path: Path
+    size_bytes: int
+    download_time_seconds: float
+    avg_speed_mbps: float = field(init=False)
+
+    def __post_init__(self):
+        if self.download_time_seconds > 0:
+            self.avg_speed_mbps = (self.size_bytes / 1024 / 1024) / self.download_time_seconds
+        else:
+            self.avg_speed_mbps = 0.0
+
+
+# Available multilingual models with metadata
+# Based on official OpenAI Whisper: https://github.com/openai/whisper
+# Ordered by size/speed: tiny < base < small < medium < large < turbo
 AVAILABLE_MODELS: dict[str, ModelInfo] = {
     "tiny": ModelInfo(
         name="tiny",
         size_mb=74,
-        description="Fastest, lowest accuracy",
+        description="39M params, ~1GB VRAM, fastest",
         mlx_repo="mlx-community/whisper-tiny-mlx",
         faster_whisper_name="tiny",
     ),
     "base": ModelInfo(
         name="base",
         size_mb=142,
-        description="Fast, basic accuracy",
+        description="74M params, ~1GB VRAM, fast",
         mlx_repo="mlx-community/whisper-base-mlx",
         faster_whisper_name="base",
     ),
     "small": ModelInfo(
         name="small",
         size_mb=466,
-        description="Balanced speed/accuracy",
+        description="244M params, ~2GB VRAM, balanced",
         mlx_repo="mlx-community/whisper-small-mlx",
         faster_whisper_name="small",
     ),
     "medium": ModelInfo(
         name="medium",
         size_mb=1500,
-        description="Good accuracy, slower",
+        description="769M params, ~5GB VRAM, accurate",
         mlx_repo="mlx-community/whisper-medium-mlx",
         faster_whisper_name="medium",
+    ),
+    "large": ModelInfo(
+        name="large",
+        size_mb=2900,
+        description="1550M params, ~10GB VRAM, v1",
+        mlx_repo="mlx-community/whisper-large-mlx",
+        faster_whisper_name="large",
     ),
     "large-v3": ModelInfo(
         name="large-v3",
         size_mb=3100,
-        description="Best accuracy, slowest",
+        description="1550M params, ~10GB VRAM, best accuracy",
         mlx_repo="mlx-community/whisper-large-v3-mlx",
         faster_whisper_name="large-v3",
     ),
-    "large-v3-turbo": ModelInfo(
-        name="large-v3-turbo",
+    "turbo": ModelInfo(
+        name="turbo",
         size_mb=1600,
-        description="Good accuracy, faster than large",
-        mlx_repo="mlx-community/whisper-large-v3-turbo",
-        faster_whisper_name="large-v3-turbo",
+        description="809M params, ~6GB VRAM, optimized large-v3",
+        mlx_repo="mlx-community/whisper-turbo",
+        faster_whisper_name="turbo",
     ),
 }
 
-# Progress callback type: (downloaded_bytes, total_bytes) -> None
-ProgressCallback = Callable[[int, int], None]
+# Progress callback type: (progress: DownloadProgress) -> None
+ProgressCallback = Callable[["DownloadProgress"], None]
 
 
 class ModelManager:
     """Manages downloading and caching of Whisper models."""
 
-    def __init__(self, models_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        models_dir: Path | None = None,
+        preloader: "ModelPreloader | None" = None,
+    ) -> None:
         """Initialize model manager.
 
         Args:
             models_dir: Directory to store models. Defaults to ~/.config/soupawhisper/models/
         """
         self._models_dir = models_dir or MODELS_DIR
-        self._models_dir.mkdir(parents=True, exist_ok=True)
+        ensure_dir(self._models_dir)
+        if preloader is None:
+            from soupawhisper.providers.model_preloader import ModelPreloader
+
+            self._preloader = ModelPreloader(self)
+        else:
+            self._preloader = preloader
 
     @property
     def models_dir(self) -> Path:
@@ -99,9 +187,17 @@ class ModelManager:
         """Get list of available models to download.
 
         Returns:
-            List of ModelInfo objects
+            List of ModelInfo objects (multilingual only)
         """
         return list(AVAILABLE_MODELS.values())
+
+    def list_multilingual(self) -> list[ModelInfo]:
+        """Get list of multilingual models (no .en suffix).
+
+        Returns:
+            List of ModelInfo objects for multilingual models
+        """
+        return [m for m in AVAILABLE_MODELS.values() if ".en" not in m.name]
 
     def list_downloaded(self) -> list[str]:
         """Get list of downloaded model names.
@@ -157,16 +253,16 @@ class ModelManager:
     def download_for_mlx(
         self,
         model_name: str,
-        progress_callback: ProgressCallback | None = None,
-    ) -> Path:
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> DownloadResult:
         """Download model for MLX provider (uses HuggingFace Hub).
 
         Args:
-            model_name: Model name (e.g., "large-v3-turbo")
+            model_name: Model name (e.g., "large-v3", "turbo")
             progress_callback: Optional callback for download progress
 
         Returns:
-            Path to downloaded model
+            DownloadResult with path and metrics
 
         Raises:
             ValueError: If model not found
@@ -183,16 +279,60 @@ class ModelManager:
 
             # Download to models directory
             model_path = self._models_dir / model_name
+            start_time = time.time()
+
+            # Track progress via tqdm callback
+            class ProgressTracker:
+                def __init__(self, callback: Optional[ProgressCallback]):
+                    self.callback = callback
+                    self.downloaded = 0
+                    self.total = model_info.size_mb * 1024 * 1024  # Estimate
+                    self.start_time = time.time()
+
+                def __call__(self, n_bytes: int):
+                    self.downloaded += n_bytes
+                    if self.callback:
+                        elapsed = time.time() - self.start_time
+                        speed = (self.downloaded / 1024 / 1024) / elapsed if elapsed > 0 else 0
+                        remaining = self.total - self.downloaded
+                        eta = remaining / (self.downloaded / elapsed) if self.downloaded > 0 else 0
+                        progress = DownloadProgress(
+                            downloaded_bytes=self.downloaded,
+                            total_bytes=self.total,
+                            speed_mbps=speed,
+                            eta_seconds=eta,
+                        )
+                        self.callback(progress)
 
             # HuggingFace Hub handles caching and progress
             snapshot_download(
                 repo_id=model_info.mlx_repo,
                 local_dir=str(model_path),
-                local_dir_use_symlinks=False,
             )
 
-            logger.info(f"Model {model_name} downloaded to {model_path}")
-            return model_path
+            download_time = time.time() - start_time
+            size_on_disk = self.get_size_on_disk(model_name)
+
+            logger.info(
+                f"Model {model_name} downloaded to {model_path} "
+                f"({size_on_disk / 1024 / 1024:.1f} MB in {download_time:.1f}s)"
+            )
+
+            # Final progress callback
+            if progress_callback:
+                progress_callback(DownloadProgress(
+                    downloaded_bytes=size_on_disk,
+                    total_bytes=size_on_disk,
+                    speed_mbps=size_on_disk / 1024 / 1024 / download_time if download_time > 0 else 0,
+                    eta_seconds=0,
+                ))
+
+            return DownloadResult(
+                model_name=model_name,
+                path=model_path,
+                size_bytes=size_on_disk,
+                download_time_seconds=download_time,
+            )
 
         except ImportError:
             raise RuntimeError(
@@ -204,19 +344,19 @@ class ModelManager:
     def download_for_faster_whisper(
         self,
         model_name: str,
-        progress_callback: ProgressCallback | None = None,
-    ) -> str:
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> DownloadResult:
         """Download/prepare model for faster-whisper.
 
         faster-whisper downloads models automatically on first use,
         but we can pre-download to the cache.
 
         Args:
-            model_name: Model name (e.g., "large-v3-turbo")
+            model_name: Model name (e.g., "large-v3", "turbo")
             progress_callback: Optional callback for download progress
 
         Returns:
-            Model name (faster-whisper uses its own cache)
+            DownloadResult with metrics
 
         Raises:
             ValueError: If model not found
@@ -230,6 +370,16 @@ class ModelManager:
             from faster_whisper import WhisperModel
 
             logger.info(f"Pre-downloading faster-whisper model: {model_name}")
+            start_time = time.time()
+
+            # Notify start
+            if progress_callback:
+                progress_callback(DownloadProgress(
+                    downloaded_bytes=0,
+                    total_bytes=model_info.size_mb * 1024 * 1024,
+                    speed_mbps=0,
+                    eta_seconds=0,
+                ))
 
             # This will download the model if not cached
             # faster-whisper manages its own cache in ~/.cache/huggingface/
@@ -239,8 +389,30 @@ class ModelManager:
                 compute_type="int8",
             )
 
-            logger.info(f"Model {model_name} ready for faster-whisper")
-            return model_info.faster_whisper_name
+            download_time = time.time() - start_time
+            estimated_size = model_info.size_mb * 1024 * 1024
+
+            logger.info(
+                f"Model {model_name} ready for faster-whisper "
+                f"(~{model_info.size_mb} MB in {download_time:.1f}s)"
+            )
+
+            # Final progress callback
+            if progress_callback:
+                progress_callback(DownloadProgress(
+                    downloaded_bytes=estimated_size,
+                    total_bytes=estimated_size,
+                    speed_mbps=model_info.size_mb / download_time if download_time > 0 else 0,
+                    eta_seconds=0,
+                ))
+
+            # faster-whisper uses its own cache, return estimated size
+            return DownloadResult(
+                model_name=model_name,
+                path=Path.home() / ".cache" / "huggingface" / "hub",
+                size_bytes=estimated_size,
+                download_time_seconds=download_time,
+            )
 
         except ImportError:
             raise RuntimeError(
@@ -283,6 +455,61 @@ class ModelManager:
             if f.is_file():
                 total += f.stat().st_size
         return total
+
+    def list_models(self) -> list[ModelInfo]:
+        """Get list of all available models.
+
+        Returns:
+            List of ModelInfo objects
+        """
+        return list(AVAILABLE_MODELS.values())
+
+    def get_model_status(self, model_name: str) -> ModelStatus:
+        """Get current status of a model.
+
+        Args:
+            model_name: Model name
+
+        Returns:
+            ModelStatus enum value
+        """
+        # Check if downloaded
+        if not self.is_downloaded(model_name):
+            return ModelStatus.NOT_DOWNLOADED
+
+        # Check if loaded in server
+        try:
+            from soupawhisper.providers.mlx import get_loaded_model
+
+            loaded_model = get_loaded_model()
+            if loaded_model:
+                # Check if this model is the loaded one
+                model_path = self._models_dir / model_name
+                if str(model_path) == loaded_model or model_name in loaded_model:
+                    return ModelStatus.LOADED
+        except ImportError:
+            pass
+
+        return ModelStatus.DOWNLOADED
+
+    def preload_model(self, model_name: str, provider_type: str = "mlx") -> None:
+        """Preload a model into memory for instant use.
+
+        Args:
+            model_name: Model name to preload
+            provider_type: Provider type for preloading (default: "mlx")
+
+        Raises:
+            ModelNotDownloadedError: If model is not downloaded
+        """
+        self._preloader.preload(model_name, provider_type=provider_type)
+
+    def unload_model(self, provider_type: str = "mlx") -> None:
+        """Unload the currently loaded model from memory.
+
+        This stops the provider backend and frees memory.
+        """
+        self._preloader.unload(provider_type=provider_type)
 
 
 # Singleton instance

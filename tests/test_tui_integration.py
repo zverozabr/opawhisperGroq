@@ -162,9 +162,9 @@ class TestTUIIntegrationNavigation:
 
     @pytest.mark.asyncio
     async def test_quit_action_exits_app(self, tui_app_patched):
-        """Pressing 'q' exits the application."""
+        """Pressing Ctrl+C exits the application."""
         async with tui_app_patched.run_test() as pilot:
-            await pilot.press("q")
+            await pilot.press("ctrl+c")
             await pilot.pause()
 
             assert tui_app_patched._exit

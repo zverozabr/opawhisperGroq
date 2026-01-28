@@ -6,10 +6,15 @@ Manages multiple transcription providers with JSON configuration.
 import json
 import logging
 import sys
-from pathlib import Path
 from typing import Any
 
-from soupawhisper.constants import DEFAULT_MODEL, DEFAULT_PROVIDER, GROQ_API_URL
+from soupawhisper.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_PROVIDER,
+    GROQ_API_URL,
+    PROVIDERS_PATH,
+    ensure_dir,
+)
 from soupawhisper.providers.base import (
     ProviderConfig,
     TranscriptionError,
@@ -19,6 +24,7 @@ from soupawhisper.providers.base import (
 from soupawhisper.providers.faster_whisper import FasterWhisperProvider
 from soupawhisper.providers.mlx import MLXProvider
 from soupawhisper.providers.openai_compatible import OpenAICompatibleProvider
+from soupawhisper.providers.registry import ProviderRegistry
 
 __all__ = [
     "TranscriptionProvider",
@@ -41,7 +47,10 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-PROVIDERS_PATH = Path.home() / ".config" / "soupawhisper" / "providers.json"
+# Register provider factories
+ProviderRegistry.register("openai_compatible", OpenAICompatibleProvider)
+ProviderRegistry.register("mlx", MLXProvider)
+ProviderRegistry.register("faster_whisper", FasterWhisperProvider)
 
 # Default provider configurations
 DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
@@ -86,7 +95,7 @@ def save_providers_config(config: dict[str, Any]) -> None:
     Args:
         config: Dict with 'active' and 'providers' keys
     """
-    PROVIDERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(PROVIDERS_PATH.parent)
 
     with open(PROVIDERS_PATH, "w") as f:
         json.dump(config, f, indent=2)
@@ -195,14 +204,7 @@ def _create_provider(config: ProviderConfig) -> TranscriptionProvider:
     Raises:
         ValueError: If provider type is unknown
     """
-    if config.type == "openai_compatible":
-        return OpenAICompatibleProvider(config)
-    elif config.type == "mlx":
-        return MLXProvider(config)
-    elif config.type == "faster_whisper":
-        return FasterWhisperProvider(config)
-    else:
-        raise ValueError(f"Unknown provider type: {config.type}")
+    return ProviderRegistry.create(config)
 
 
 def list_available_local_providers() -> list[str]:
@@ -322,13 +324,22 @@ def get_provider(name: str | None = None) -> TranscriptionProvider:
         name = config.get("active", DEFAULT_PROVIDER)
 
     if name not in providers:
-        # Check if we have any providers at all
-        if not providers:
+        # Auto-create local providers if requested (KISS)
+        if name in DEFAULT_PROVIDERS:
+            default_data = DEFAULT_PROVIDERS[name]
+            if "providers" not in config:
+                config["providers"] = {}
+            config["providers"][name] = default_data.copy()
+            save_providers_config(config)
+            providers = config["providers"]
+            logger.info(f"Auto-created local provider: {name}")
+        elif not providers:
             raise ValueError(
                 "No providers configured. Add a provider to "
                 f"{PROVIDERS_PATH} or set API key in GUI."
             )
-        raise ValueError(f"Provider '{name}' not found. Available: {list(providers.keys())}")
+        else:
+            raise ValueError(f"Provider '{name}' not found. Available: {list(providers.keys())}")
 
     provider_data = providers[name]
     provider_config = ProviderConfig.from_dict(name, provider_data)

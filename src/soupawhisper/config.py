@@ -4,9 +4,7 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import DEFAULT_MODEL, DEFAULT_PROVIDER
-
-CONFIG_PATH = Path.home() / ".config" / "soupawhisper" / "config.ini"
+from .constants import CONFIG_PATH, DEFAULT_MODEL, DEFAULT_PROVIDER, ensure_dir
 
 # Valid option values
 VALID_LANGUAGES = {"auto", "ru", "en", "de", "fr", "es", "zh", "ja", "ko", "pt", "it", "nl", "pl", "uk"}
@@ -87,6 +85,8 @@ class Config:
     history_days: int = 3  # Keep history for N days
     debug: bool = False  # Save last 3 recordings for debugging
     active_provider: str = DEFAULT_PROVIDER  # Active transcription provider name
+    cloud_provider: str = "groq"  # Cloud provider (groq/openai)
+    local_backend: str = "mlx"  # Local backend (mlx/cpu)
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
@@ -111,11 +111,13 @@ class Config:
             history_days=parser.getint("history", "days", fallback=3),
             debug=parser.getboolean("behavior", "debug", fallback=False),
             active_provider=parser.get("provider", "active", fallback=DEFAULT_PROVIDER),
+            cloud_provider=parser.get("provider", "cloud", fallback="groq"),
+            local_backend=parser.get("provider", "local_backend", fallback="mlx"),
         )
 
     def save(self, path: Path = CONFIG_PATH) -> None:
         """Save configuration to file."""
-        path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_dir(path.parent)
 
         parser = configparser.ConfigParser()
         parser["groq"] = {
@@ -137,7 +139,11 @@ class Config:
             "enabled": str(self.history_enabled).lower(),
             "days": str(self.history_days),
         }
-        parser["provider"] = {"active": self.active_provider}
+        parser["provider"] = {
+            "active": self.active_provider,
+            "cloud": self.cloud_provider,
+            "local_backend": self.local_backend,
+        }
 
         with open(path, "w") as f:
             parser.write(f)

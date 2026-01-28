@@ -5,6 +5,7 @@ from typing import Callable
 
 from ..clipboard import copy_to_clipboard as _copy
 from .base import TypingMethod
+from .keys import get_xdotool_key
 from .pynput_listener import PynputHotkeyListener
 
 
@@ -42,15 +43,7 @@ class X11Backend:
 
     def press_key(self, key: str) -> None:
         """Press a single key using xdotool."""
-        # Map common key names to xdotool key names
-        key_map = {
-            "enter": "Return",
-            "tab": "Tab",
-            "escape": "Escape",
-            "space": "space",
-            "backspace": "BackSpace",
-        }
-        xdotool_key = key_map.get(key.lower(), key)
+        xdotool_key = get_xdotool_key(key)
         subprocess.run(
             ["xdotool", "key", "--clearmodifiers", xdotool_key],
             check=False,

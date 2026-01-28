@@ -71,8 +71,8 @@ class TestTUIE2ENavigation:
             await pilot.press("s")
             await pilot.pause()
 
-            # Quit
-            await pilot.press("q")
+            # Quit with Ctrl+C
+            await pilot.press("ctrl+c")
             await pilot.pause()
 
             assert tui_app_with_history._exit
@@ -88,6 +88,7 @@ class TestTUIE2EHistoryWorkflow:
             table = pilot.app.query_one(DataTable)
             # Table should have rows (exact count depends on mock)
             assert table is not None
+            assert table.row_count > 0
 
     @pytest.mark.asyncio
     async def test_copy_transcription_to_clipboard(self, tui_app_with_history, mock_history_entries):
@@ -114,8 +115,8 @@ class TestTUIE2EHistoryWorkflow:
                     await pilot.press("c")
                     await pilot.pause()
 
-                    # Should have called copy
-                    mock_copy.assert_called()
+                    # Should have called copy with the selected text
+                    mock_copy.assert_called_once_with(mock_history_entries[0]["text"])
 
 
 class TestTUIE2ESettingsWorkflow:
@@ -129,9 +130,9 @@ class TestTUIE2ESettingsWorkflow:
             await pilot.press("s")
             await pilot.pause()
 
-            # Check provider select has value (ID from registry)
-            provider_select = pilot.app.query_one("#active-provider-select", Select)
-            assert provider_select.value == mock_config.active_provider
+            # Check cloud provider select has value (new UI with tabs)
+            provider_select = pilot.app.query_one("#cloud-provider-select", Select)
+            assert provider_select.value == mock_config.cloud_provider
 
     @pytest.mark.asyncio
     async def test_toggle_auto_type(self, tui_app_with_history):
@@ -340,8 +341,8 @@ class TestTUIE2EFullWorkflow:
             app.on_transcription_complete("Test transcription", "en")
             await pilot.pause()
 
-            # 8. Quit
-            await pilot.press("q")
+            # 8. Quit with Ctrl+C
+            await pilot.press("ctrl+c")
             await pilot.pause()
             assert app._exit
 
@@ -383,7 +384,7 @@ class TestTUIE2ELocalModels:
             # Find download button
             download_btn = pilot.app.query_one("#download-model", Button)
             assert download_btn is not None
-            assert download_btn.label == "Download"
+            assert "Download" in str(download_btn.label)
 
             # Progress bar exists
             progress = pilot.app.query_one("#download-progress", ProgressBar)
@@ -402,7 +403,7 @@ class TestTUIE2ELocalModels:
             # Find delete button
             delete_btn = pilot.app.query_one("#delete-model", Button)
             assert delete_btn is not None
-            assert delete_btn.label == "Delete"
+            assert "Delete" in str(delete_btn.label)
 
     @pytest.mark.asyncio
     async def test_model_select_changes(self, tui_app_with_history):

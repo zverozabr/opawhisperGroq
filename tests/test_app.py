@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soupawhisper.app import App
+from soupawhisper.app import App, validate_config
 from soupawhisper.config import Config
 
 
@@ -62,13 +62,18 @@ class TestAppInitialization:
             assert app.backend == mock_backend
             MockRecorder.assert_called_once_with(device="default")
 
-    def test_init_without_api_key_exits(self, mock_backend):
-        """Test App exits if no API key configured."""
-        config = Config(api_key="")
+    def test_validate_config_requires_api_key_for_cloud(self):
+        """validate_config reports missing API key for cloud provider."""
+        config = Config(api_key="", active_provider="groq")
+        errors = validate_config(config)
+        assert errors
+        assert "API key" in errors[0]
 
-        with patch("soupawhisper.app.AudioRecorder"):
-            with pytest.raises(SystemExit):
-                App(config=config, backend=mock_backend)
+    def test_validate_config_allows_local_without_api_key(self):
+        """validate_config allows local providers without API key."""
+        config = Config(api_key="", active_provider="local-mlx")
+        errors = validate_config(config)
+        assert errors == []
 
     def test_init_creates_backend_if_none(self, mock_config):
         """Test App creates backend if none provided."""
@@ -246,11 +251,8 @@ class TestAppTranscription:
 
                 app = App(config=mock_config, backend=mock_backend, on_transcribing=on_transcribing)
 
-                # Should not raise
-                try:
+                with pytest.raises(Exception):
                     app._transcribe_async("/tmp/test.wav")
-                except Exception:
-                    pass
 
                 # Cleanup should still be called
                 mock_recorder.cleanup.assert_called_once()

@@ -6,6 +6,7 @@ SOLID principles applied:
 """
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
 from soupawhisper.config import CONFIG_PATH, Config
@@ -36,18 +37,19 @@ class TUIApp(App):
     CSS_PATH = "styles.tcss"
 
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("h", "switch_to_history", "History"),
-        ("s", "switch_to_settings", "Settings"),
-        ("c", "copy_selected", "Copy"),
-        ("?", "show_help", "Help"),
+        Binding("escape", "quit", "Quit", priority=True),
+        Binding("ctrl+c", "quit", "Quit", priority=True, show=False),
+        Binding("h", "switch_tab('history-tab')", "History", show=False),
+        Binding("s", "switch_tab('settings-tab')", "Settings", show=False),
+        Binding("c", "copy_selected", "Copy", show=False),
     ]
 
-    def __init__(self, test_mode: bool = False):
+    def __init__(self, test_mode: bool = False, config: Config | None = None):
         """Initialize TUI application.
 
         Args:
             test_mode: If True, skip starting worker (for testing).
+            config: Optional config to use (for CLI flags like --debug).
         """
         super().__init__()
         self._test_mode = test_mode
@@ -56,7 +58,7 @@ class TUIApp(App):
         self._waveform = None
         self._history_screen = None
         self._settings_screen = None
-        self.config = Config.load()
+        self.config = config if config is not None else Config.load()
         self.history = HistoryStorage()
 
     def compose(self) -> ComposeResult:
@@ -118,18 +120,46 @@ class TUIApp(App):
             self._worker_controller.stop()
         self.exit()
 
+    def _is_hotkey_capture_active(self) -> bool:
+        """Check if hotkey capture mode is active.
+
+        Returns:
+            True if any HotkeyCapture widget is in capture mode.
+        """
+        try:
+            from soupawhisper.tui.widgets.hotkey_capture import HotkeyCapture
+
+            widgets = self.query(HotkeyCapture)
+            return any(w.is_capturing for w in widgets)
+        except Exception:
+            return False
+
+    def action_switch_tab(self, tab_id: str) -> None:
+        """Switch to specified tab.
+
+        Args:
+            tab_id: Tab ID to switch to (e.g., 'history-tab', 'settings-tab').
+        """
+        if self._is_hotkey_capture_active():
+            return  # Block during hotkey capture
+
+        tabs = self.query(TabbedContent)
+        if tabs:
+            tabs.first().active = tab_id
+
     def action_switch_to_history(self) -> None:
         """Switch to History tab."""
-        tabs = self.query_one(TabbedContent)
-        tabs.active = "history-tab"
+        self.action_switch_tab("history-tab")
 
     def action_switch_to_settings(self) -> None:
         """Switch to Settings tab."""
-        tabs = self.query_one(TabbedContent)
-        tabs.active = "settings-tab"
+        self.action_switch_tab("settings-tab")
 
     def action_copy_selected(self) -> None:
         """Copy selected history entry to clipboard."""
+        if self._is_hotkey_capture_active():
+            return  # Block during hotkey capture
+
         if self._history_screen:
             self._history_screen.copy_selected()
 
@@ -161,6 +191,16 @@ class TUIApp(App):
         """Restart the background worker."""
         if hasattr(self, "_worker_controller") and self._worker_controller:
             self._worker_controller.restart()
+
+    def pause_hotkey_listener(self) -> None:
+        """Pause hotkey listener (for hotkey capture mode)."""
+        if hasattr(self, "_worker_controller") and self._worker_controller:
+            self._worker_controller.pause()
+
+    def resume_hotkey_listener(self) -> None:
+        """Resume hotkey listener (after hotkey capture)."""
+        if hasattr(self, "_worker_controller") and self._worker_controller:
+            self._worker_controller.resume()
 
     # UI Event handlers (called from WorkerManager)
     def on_recording_changed(self, is_recording: bool) -> None:
@@ -214,6 +254,26 @@ class TUIApp(App):
 
 
 def run_tui() -> None:
-    """Run the TUI application."""
-    app = TUIApp()
+    """Run the TUI application.
+
+    Checks terminal compatibility before starting.
+    """
+    import os
+    import sys
+
+    # Check terminal compatibility
+    term = os.environ.get("TERM", "")
+    if term in ("dumb", "", "unknown"):
+        print("Error: TUI requires a terminal with escape sequence support.")
+        print(f"Current TERM={term!r}")
+        print()
+        print("Solutions:")
+        print("  1. Run from Terminal.app, iTerm2, or another full terminal")
+        print("  2. Set TERM manually: TERM=xterm-256color uv run soupawhisper --gui")
+        print()
+        print("Note: IDE integrated terminals (Cursor, VS Code) may not work properly.")
+        sys.exit(1)
+
+    config = Config.load()
+    app = TUIApp(config=config)
     app.run()

@@ -1,11 +1,10 @@
 [Desktop Entry]
 Name=SoupaWhisper
 Comment=Voice dictation tool using Groq Whisper API
-Exec=soupawhisper --gui
+Exec=soupawhisper
 Icon=soupawhisper
-Terminal=false
+Terminal=true
 Type=Application
 Categories=AudioVideo;Audio;Utility;
 Keywords=voice;dictation;transcription;whisper;speech;
 StartupNotify=true
-StartupWMClass=flet

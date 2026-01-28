@@ -69,6 +69,16 @@ class WorkerController:
         self.stop()
         self.start()
 
+    def pause(self) -> None:
+        """Pause the background worker (stop hotkey listening)."""
+        if self._worker:
+            self._worker.stop()
+            log.debug("Worker paused")
+
+    def resume(self) -> None:
+        """Resume the background worker (restart hotkey listening)."""
+        self.start()
+
     def _wrap(self, callback: Optional[Callable]) -> Optional[Callable]:
         """Wrap callback to be thread-safe.
 

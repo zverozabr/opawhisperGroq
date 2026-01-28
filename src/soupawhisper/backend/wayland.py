@@ -9,56 +9,7 @@ import evdev
 from evdev import ecodes
 
 from .base import TypingMethod
-
-# Map common key names to evdev codes
-KEY_MAP = {
-    "ctrl_r": ecodes.KEY_RIGHTCTRL,
-    "ctrl_l": ecodes.KEY_LEFTCTRL,
-    "alt_r": ecodes.KEY_RIGHTALT,
-    "alt_l": ecodes.KEY_LEFTALT,
-    "shift_r": ecodes.KEY_RIGHTSHIFT,
-    "shift_l": ecodes.KEY_LEFTSHIFT,
-    "super_r": ecodes.KEY_RIGHTMETA,
-    "super_l": ecodes.KEY_LEFTMETA,
-    "f1": ecodes.KEY_F1,
-    "f2": ecodes.KEY_F2,
-    "f3": ecodes.KEY_F3,
-    "f4": ecodes.KEY_F4,
-    "f5": ecodes.KEY_F5,
-    "f6": ecodes.KEY_F6,
-    "f7": ecodes.KEY_F7,
-    "f8": ecodes.KEY_F8,
-    "f9": ecodes.KEY_F9,
-    "f10": ecodes.KEY_F10,
-    "f11": ecodes.KEY_F11,
-    "f12": ecodes.KEY_F12,
-    "space": ecodes.KEY_SPACE,
-    "enter": ecodes.KEY_ENTER,
-    "escape": ecodes.KEY_ESC,
-    "tab": ecodes.KEY_TAB,
-    "backspace": ecodes.KEY_BACKSPACE,
-    "caps_lock": ecodes.KEY_CAPSLOCK,
-    "scroll_lock": ecodes.KEY_SCROLLLOCK,
-    "print_screen": ecodes.KEY_SYSRQ,
-    "pause": ecodes.KEY_PAUSE,
-    "insert": ecodes.KEY_INSERT,
-    "delete": ecodes.KEY_DELETE,
-    "home": ecodes.KEY_HOME,
-    "end": ecodes.KEY_END,
-    "page_up": ecodes.KEY_PAGEUP,
-    "page_down": ecodes.KEY_PAGEDOWN,
-}
-
-
-def _get_evdev_keycode(key_name: str) -> int:
-    """Map key name to evdev keycode."""
-    key_name = key_name.lower()
-    if key_name in KEY_MAP:
-        return KEY_MAP[key_name]
-    if len(key_name) == 1:
-        code_name = f"KEY_{key_name.upper()}"
-        return getattr(ecodes, code_name, ecodes.KEY_F12)
-    return ecodes.KEY_F12
+from .keys import get_evdev_keycode, get_ydotool_keycode
 
 
 def _find_keyboard_devices() -> list[evdev.InputDevice]:
@@ -179,14 +130,7 @@ class WaylandBackend:
 
     def press_key(self, key: str) -> None:
         """Press a single key using ydotool."""
-        key_map = {
-            "enter": "28",
-            "tab": "15",
-            "escape": "1",
-            "space": "57",
-            "backspace": "14",
-        }
-        key_code = key_map.get(key.lower())
+        key_code = get_ydotool_keycode(key)
         if key_code and _has_command("ydotool"):
             subprocess.run(
                 ["ydotool", "key", f"{key_code}:1", f"{key_code}:0"],
@@ -202,7 +146,7 @@ class WaylandBackend:
         """Listen for hotkey using evdev. Blocks until interrupted or stop() called."""
         self._stop_event.clear()
 
-        target_code = _get_evdev_keycode(key)
+        target_code = get_evdev_keycode(key)
         devices = _find_keyboard_devices()
 
         if not devices:

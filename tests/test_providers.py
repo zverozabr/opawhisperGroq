@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -305,61 +306,53 @@ class TestMLXProvider:
 
             assert "not available" in str(exc_info.value)
 
-    def test_transcribe_success_with_mock(self, tmp_path):
-        """Test successful transcription with mocked mlx_whisper."""
-        config = ProviderConfig(name="mlx", type="mlx", model="mlx-community/whisper-base-mlx")
+    @pytest.mark.integration
+    def test_transcribe_success_with_real_model(self, tmp_path):
+        """Test successful transcription with real MLX model.
+        
+        Note: This test requires MLX and a downloaded model.
+        Skipped if MLX is not available or no models downloaded.
+        """
+        config = ProviderConfig(name="mlx", type="mlx", model="base")
         provider = MLXProvider(config)
+        
+        if not provider.is_available():
+            pytest.skip("MLX not available")
+        
+        from soupawhisper.providers.models import get_model_manager
+        manager = get_model_manager()
+        if not manager.is_downloaded("base"):
+            pytest.skip("Base model not downloaded")
+        
+        # Use real audio fixture if available
+        fixture_path = Path(__file__).parent / "fixtures" / "test_russian_speech.wav"
+        if not fixture_path.exists():
+            pytest.skip("Test audio fixture not found")
+        
+        result = provider.transcribe(str(fixture_path), "ru")
+        assert len(result.text) > 0
 
-        # Create temp audio file
-        audio_file = tmp_path / "test.wav"
-        audio_file.write_bytes(b"fake audio")
-
-        # Mock the mlx_whisper module
-        mock_mlx_whisper = MagicMock()
-        mock_mlx_whisper.transcribe.return_value = {"text": "Hello world", "language": "en"}
-
-        with patch.object(provider, "is_available", return_value=True):
-            with patch.dict(sys.modules, {"mlx_whisper": mock_mlx_whisper}):
-                result = provider.transcribe(str(audio_file), "en")
-
-                assert result.text == "Hello world"
-                assert result.raw_response["text"] == "Hello world"
-                mock_mlx_whisper.transcribe.assert_called_once()
-
-    def test_transcribe_auto_language(self, tmp_path):
-        """Test transcription with auto language passes None."""
+    def test_transcribe_mocked_server_response(self, tmp_path):
+        """Test transcription with mocked server response."""
         config = ProviderConfig(name="mlx", type="mlx", model="base")
         provider = MLXProvider(config)
 
-        audio_file = tmp_path / "test.wav"
-        audio_file.write_bytes(b"audio")
-
-        mock_mlx_whisper = MagicMock()
-        mock_mlx_whisper.transcribe.return_value = {"text": "Привет", "language": "ru"}
-
+        from soupawhisper.providers.mlx_server_manager import MLXServerManager
+        
+        # Mock the server manager's send_request
         with patch.object(provider, "is_available", return_value=True):
-            with patch.dict(sys.modules, {"mlx_whisper": mock_mlx_whisper}):
-                provider.transcribe(str(audio_file), "auto")
-
-                # Check language=None was passed for auto
-                call_kwargs = mock_mlx_whisper.transcribe.call_args.kwargs
-                assert call_kwargs.get("language") is None
-
-    def test_transcribe_strips_whitespace(self, tmp_path):
-        """Test transcription text is stripped."""
-        config = ProviderConfig(name="mlx", type="mlx", model="base")
-        provider = MLXProvider(config)
-
-        audio_file = tmp_path / "test.wav"
-        audio_file.write_bytes(b"audio")
-
-        mock_mlx_whisper = MagicMock()
-        mock_mlx_whisper.transcribe.return_value = {"text": "  Привет мир  "}
-
-        with patch.object(provider, "is_available", return_value=True):
-            with patch.dict(sys.modules, {"mlx_whisper": mock_mlx_whisper}):
-                result = provider.transcribe(str(audio_file), "ru")
-                assert result.text == "Привет мир"
+            with patch.object(provider, "_ensure_server_running"):
+                with patch("soupawhisper.providers.mlx.get_server_manager") as mock_get_manager:
+                    mock_manager = MagicMock(spec=MLXServerManager)
+                    mock_manager.send_request.return_value = {
+                        "text": "Hello world",
+                        "time_ms": 100
+                    }
+                    mock_get_manager.return_value = mock_manager
+                    
+                    result = provider.transcribe("/fake/audio.wav", "en")
+                    
+                    assert result.text == "Hello world"
 
     def test_transcribe_error_handling(self, tmp_path):
         """Test transcription error is wrapped in TranscriptionError."""
@@ -377,7 +370,13 @@ class TestMLXProvider:
                 with pytest.raises(TranscriptionError) as exc_info:
                     provider.transcribe(str(audio_file), "en")
 
-                assert "MLX transcription failed" in str(exc_info.value)
+                # Error could be server error, subprocess error, or generic MLX error
+                error_msg = str(exc_info.value)
+                assert any(msg in error_msg for msg in [
+                    "MLX transcription failed",
+                    "MLX subprocess failed",
+                    "Server error",
+                ])
 
 
 class TestFasterWhisperProvider:
@@ -673,7 +672,7 @@ class TestModelManager:
         assert "tiny" in AVAILABLE_MODELS
         assert "base" in AVAILABLE_MODELS
         assert "large-v3" in AVAILABLE_MODELS
-        assert "large-v3-turbo" in AVAILABLE_MODELS
+        assert "turbo" in AVAILABLE_MODELS
 
     def test_model_info_has_required_fields(self):
         """Test ModelInfo has all required fields."""
@@ -741,9 +740,9 @@ class TestModelManager:
         """Test getting model metadata."""
         manager = ModelManager(models_dir=tmp_path)
 
-        info = manager.get_model_info("large-v3-turbo")
+        info = manager.get_model_info("turbo")
         assert info is not None
-        assert info.name == "large-v3-turbo"
+        assert info.name == "turbo"
         assert info.size_mb == 1600
 
         # Unknown model

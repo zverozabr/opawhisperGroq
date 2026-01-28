@@ -167,3 +167,160 @@ PYNPUT_KEY_TO_NAME: dict[pynput_keyboard.Key, str] = {
     for attr, name in _KEY_TO_NAME_SPEC
     if (key := _safe_key(attr)) is not None
 }
+
+
+# === Platform-specific key mappings (DRY: centralized for all backends) ===
+
+# X11/xdotool key names (used by x11.py)
+# xdotool uses X11 keysym names
+XDOTOOL_KEY_MAP = {
+    "enter": "Return",
+    "tab": "Tab",
+    "escape": "Escape",
+    "space": "space",
+    "backspace": "BackSpace",
+    "delete": "Delete",
+    "home": "Home",
+    "end": "End",
+    "page_up": "Page_Up",
+    "page_down": "Page_Down",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+}
+
+
+def get_xdotool_key(key_name: str) -> str:
+    """Get xdotool key name for a key.
+
+    Args:
+        key_name: Key name like 'enter', 'tab'
+
+    Returns:
+        xdotool key name
+    """
+    return XDOTOOL_KEY_MAP.get(key_name.lower(), key_name)
+
+
+# Ydotool evdev scan codes (used by wayland.py for press_key)
+# These are Linux kernel scan codes
+YDOTOOL_KEY_MAP = {
+    "enter": "28",
+    "tab": "15",
+    "escape": "1",
+    "space": "57",
+    "backspace": "14",
+    "delete": "111",
+    "home": "102",
+    "end": "107",
+    "page_up": "104",
+    "page_down": "109",
+    "up": "103",
+    "down": "108",
+    "left": "105",
+    "right": "106",
+}
+
+
+def get_ydotool_keycode(key_name: str) -> str | None:
+    """Get ydotool keycode for a key.
+
+    Args:
+        key_name: Key name like 'enter', 'tab'
+
+    Returns:
+        ydotool keycode string or None if not found
+    """
+    return YDOTOOL_KEY_MAP.get(key_name.lower())
+
+
+# Evdev key codes for hotkey listening (used by wayland.py)
+# Lazy import to avoid dependency on non-Linux platforms
+_EVDEV_KEY_MAP: dict[str, int] | None = None
+
+
+def _init_evdev_map() -> dict[str, int]:
+    """Initialize evdev key map (lazy loaded)."""
+    global _EVDEV_KEY_MAP
+    if _EVDEV_KEY_MAP is not None:
+        return _EVDEV_KEY_MAP
+
+    try:
+        from evdev import ecodes
+
+        _EVDEV_KEY_MAP = {
+            "ctrl_r": ecodes.KEY_RIGHTCTRL,
+            "ctrl_l": ecodes.KEY_LEFTCTRL,
+            "alt_r": ecodes.KEY_RIGHTALT,
+            "alt_l": ecodes.KEY_LEFTALT,
+            "shift_r": ecodes.KEY_RIGHTSHIFT,
+            "shift_l": ecodes.KEY_LEFTSHIFT,
+            "super_r": ecodes.KEY_RIGHTMETA,
+            "super_l": ecodes.KEY_LEFTMETA,
+            "f1": ecodes.KEY_F1,
+            "f2": ecodes.KEY_F2,
+            "f3": ecodes.KEY_F3,
+            "f4": ecodes.KEY_F4,
+            "f5": ecodes.KEY_F5,
+            "f6": ecodes.KEY_F6,
+            "f7": ecodes.KEY_F7,
+            "f8": ecodes.KEY_F8,
+            "f9": ecodes.KEY_F9,
+            "f10": ecodes.KEY_F10,
+            "f11": ecodes.KEY_F11,
+            "f12": ecodes.KEY_F12,
+            "space": ecodes.KEY_SPACE,
+            "enter": ecodes.KEY_ENTER,
+            "escape": ecodes.KEY_ESC,
+            "tab": ecodes.KEY_TAB,
+            "backspace": ecodes.KEY_BACKSPACE,
+            "caps_lock": ecodes.KEY_CAPSLOCK,
+            "scroll_lock": ecodes.KEY_SCROLLLOCK,
+            "print_screen": ecodes.KEY_SYSRQ,
+            "pause": ecodes.KEY_PAUSE,
+            "insert": ecodes.KEY_INSERT,
+            "delete": ecodes.KEY_DELETE,
+            "home": ecodes.KEY_HOME,
+            "end": ecodes.KEY_END,
+            "page_up": ecodes.KEY_PAGEUP,
+            "page_down": ecodes.KEY_PAGEDOWN,
+        }
+    except ImportError:
+        _EVDEV_KEY_MAP = {}
+
+    return _EVDEV_KEY_MAP
+
+
+def get_evdev_keycode(key_name: str) -> int:
+    """Get evdev keycode for a key name.
+
+    Args:
+        key_name: Key name like 'ctrl_r', 'f12'
+
+    Returns:
+        evdev keycode, defaults to KEY_F12 if not found
+    """
+    key_map = _init_evdev_map()
+    key_name = key_name.lower()
+
+    if key_name in key_map:
+        return key_map[key_name]
+
+    # Single character - try to get from ecodes
+    if len(key_name) == 1:
+        try:
+            from evdev import ecodes
+
+            code_name = f"KEY_{key_name.upper()}"
+            return getattr(ecodes, code_name, ecodes.KEY_F12)
+        except ImportError:
+            pass
+
+    # Default fallback
+    try:
+        from evdev import ecodes
+
+        return ecodes.KEY_F12
+    except ImportError:
+        return 87  # F12 raw code

@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from . import __version__
-from .app import App
+from .app import App, validate_config
 from .backend import detect_backend_type
 from .config import Config
 from .lock import acquire_lock, release_lock
@@ -20,13 +20,20 @@ def check_dependencies(backend_type: str) -> None:
     """Verify required system tools are installed."""
     if sys.platform == "darwin":
         required = [("rec", "brew install sox")]
+        optional = []
     elif sys.platform == "win32":
         required = [("ffmpeg", "winget install ffmpeg")]
+        optional = []
     elif backend_type == "wayland":
+        # Wayland: only audio and clipboard are required
+        # Typing tools (wtype/ydotool) are optional - falls back to clipboard
         required = [
             ("arecord", "sudo pacman -S alsa-utils"),
             ("wl-copy", "sudo pacman -S wl-clipboard"),
-            ("ydotool", "sudo pacman -S ydotool"),
+        ]
+        optional = [
+            ("wtype", "For auto-typing: yay -S wtype"),
+            ("ydotool", "Alternative: sudo pacman -S ydotool"),
         ]
     else:  # x11
         required = [
@@ -34,6 +41,7 @@ def check_dependencies(backend_type: str) -> None:
             ("xclip", "sudo pacman -S xclip"),
             ("xdotool", "sudo pacman -S xdotool"),
         ]
+        optional = []
 
     # Check command existence
     if sys.platform == "win32":
@@ -56,6 +64,19 @@ def check_dependencies(backend_type: str) -> None:
             log.error(f"  {cmd} - install: {install_hint}")
         sys.exit(1)
 
+    # Check optional dependencies (warn but don't exit)
+    if optional:
+        missing_optional = []
+        for cmd, hint in optional:
+            result = subprocess.run([*check_cmd, cmd], capture_output=True)
+            if result.returncode != 0:
+                missing_optional.append((cmd, hint))
+        
+        # Warn if no typing tool available (Wayland)
+        if backend_type == "wayland" and len(missing_optional) == len(optional):
+            log.warning("No typing tool found (wtype/ydotool). Text will be copied to clipboard only.")
+            log.warning("Install wtype for auto-typing: yay -S wtype")
+
 
 def has_display() -> bool:
     """Check if display is available."""
@@ -77,6 +98,13 @@ def run_cli(config: Config) -> None:
     log.info(f"Model: {config.model}")
     log.info(f"Language: {config.language}")
 
+    errors = validate_config(config)
+    if errors:
+        for error in errors:
+            log.error(error)
+        log.error("Add your API key to ~/.config/soupawhisper/config.ini")
+        sys.exit(1)
+
     app = App(config)
 
     def handle_sigint(*_):
@@ -89,18 +117,11 @@ def run_cli(config: Config) -> None:
     app.run()
 
 
-def run_tui() -> None:
+def run_tui(config: Config) -> None:
     """Run in TUI mode (default)."""
-    from .tui import run_tui as tui_main
+    from .tui.app import TUIApp
 
-    tui_main()
-
-
-def run_gui() -> None:
-    """Run in legacy GUI mode (Flet) - DEPRECATED."""
-    log.warning("GUI mode has been removed. Use TUI mode instead.")
-    log.info("Starting TUI mode...")
-    run_tui()
+    TUIApp(config=config).run()
 
 
 def main() -> None:
@@ -114,11 +135,6 @@ def main() -> None:
         help="Run with terminal user interface (default)",
     )
     parser.add_argument(
-        "--gui",
-        action="store_true",
-        help="Run with legacy graphical user interface (Flet)",
-    )
-    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without UI (CLI mode - hotkey only)",
@@ -128,12 +144,34 @@ def main() -> None:
         action="version",
         version=f"SoupaWhisper v{__version__}",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging and save recordings",
+    )
     args = parser.parse_args()
 
     acquire_lock()  # Kills existing instance if any
 
     config = Config.load()
-    setup_logging(debug=config.debug)
+    # Override debug from CLI if specified
+    if args.debug:
+        config.debug = True
+
+    # Setup logging - write to file in debug mode
+    log_file = None
+    if config.debug:
+        from soupawhisper.constants import LOGS_DIR, ensure_dir
+        ensure_dir(LOGS_DIR)
+        log_file = LOGS_DIR / "soupawhisper.log"
+
+    # Determine if TUI mode (no console logs to avoid display corruption)
+    is_tui_mode = not args.headless
+
+    setup_logging(debug=config.debug, log_file=log_file, tui_mode=is_tui_mode)
+
+    if config.debug and log_file:
+        log.info(f"Debug mode enabled. Logs: {log_file}")
 
     # Validate config
     errors = config.validate()
@@ -143,13 +181,11 @@ def main() -> None:
             log.warning(f"  - {error}")
 
     try:
-        if args.gui:
-            run_gui()
-        elif args.headless:
+        if args.headless:
             run_cli(config)
         else:
             # Default: TUI mode
-            run_tui()
+            run_tui(config)
     finally:
         release_lock()
 

@@ -32,8 +32,12 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
-echo "Starting GUI..."
+# Ensure terminal supports escape sequences (required for TUI)
+export TERM="${TERM:-xterm-256color}"
+
+echo "Starting TUI..."
+echo "Terminal: $TERM_PROGRAM ($TERM)"
 echo ""
 
-# Run SoupaWhisper GUI
-exec uv run soupawhisper --gui
+# Run SoupaWhisper TUI
+exec uv run soupawhisper

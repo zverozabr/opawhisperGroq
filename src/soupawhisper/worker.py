@@ -1,7 +1,7 @@
 """Background worker management.
 
 Single Responsibility: Manage background threads for hotkey listening.
-Framework-agnostic: Works with both GUI (Flet) and TUI (Textual).
+Framework-agnostic: Works with TUI (Textual) and CLI mode.
 
 SOLID/DIP: Depends on CoreApp Protocol, not concrete App implementation.
 """
@@ -41,8 +41,7 @@ class WorkerManager:
     - Starting the core app in a background thread
     - Graceful shutdown
 
-    Framework-agnostic: Does not depend on Flet or Textual.
-    The run_in_thread callable is provided by the UI framework.
+    Framework-agnostic: Does not depend on specific UI framework.
     """
 
     def __init__(
@@ -90,22 +89,6 @@ class WorkerManager:
         self._running = True
         self._thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._thread.start()
-
-    def start_with_runner(self, run_in_thread: Callable[[Callable[[], None]], None]) -> None:
-        """Start the worker using provided thread runner.
-
-        This is for frameworks that provide their own thread management
-        (e.g., Flet's page.run_thread, Textual's run_worker).
-
-        Args:
-            run_in_thread: Function to run the worker loop in a thread.
-        """
-        if self._running:
-            log.warning("Worker already running")
-            return
-
-        self._running = True
-        run_in_thread(self._worker_loop)
 
     def stop(self) -> None:
         """Stop the worker and cleanup."""

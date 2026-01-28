@@ -46,7 +46,7 @@ def get_api_key() -> str | None:
         if key and key != "your_groq_api_key_here":
             return key
     except Exception:
-        pass
+        key = None
 
     # Fall back to old config.ini
     try:
@@ -54,7 +54,7 @@ def get_api_key() -> str | None:
         if config.api_key and config.api_key != "your_groq_api_key_here":
             return config.api_key
     except Exception:
-        pass
+        key = None
 
     return None
 
@@ -374,9 +374,9 @@ class TestModelManager:
 
     def test_model_info_correct(self):
         """Test model info is correct."""
-        assert "large-v3-turbo" in AVAILABLE_MODELS
+        assert "turbo" in AVAILABLE_MODELS
 
-        info = AVAILABLE_MODELS["large-v3-turbo"]
+        info = AVAILABLE_MODELS["turbo"]
         assert info.size_mb == 1600
         assert info.mlx_repo is not None
         assert info.faster_whisper_name is not None

@@ -109,6 +109,14 @@ class HistoryScreen(Container):
 
             self._table.add_row(time_str, text, lang, key=entry_id)
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle row selection - auto-copy to clipboard.
+
+        Args:
+            event: Row selected event from DataTable.
+        """
+        self.copy_selected()
+
     def copy_selected(self) -> None:
         """Copy selected entry text to clipboard."""
         if not self._table or not self._entries:

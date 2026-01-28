@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from soupawhisper.constants import HISTORY_PATH, ensure_dir
+
 
 @dataclass
 class HistoryEntry:
@@ -42,11 +44,8 @@ class HistoryStorage:
         Args:
             file_path: Path to Markdown file. Defaults to ~/.config/soupawhisper/history.md
         """
-        if file_path is None:
-            file_path = Path.home() / ".config" / "soupawhisper" / "history.md"
-
-        self.file_path = file_path
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.file_path = file_path or HISTORY_PATH
+        ensure_dir(self.file_path.parent)
         self._next_id = 1
         self._entries: list[HistoryEntry] = []
         self._load()

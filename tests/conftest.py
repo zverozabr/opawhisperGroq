@@ -4,6 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Enable pytest-asyncio for all async tests
+pytest_plugins = ["pytest_asyncio"]
+
 
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args):
@@ -40,6 +43,9 @@ def mock_config():
     config.notifications = True
     config.backend = "auto"
     config.audio_device = "default"
+    # New fields for Cloud/Local toggle
+    config.cloud_provider = "groq"
+    config.local_backend = "mlx"
     return config
 
 

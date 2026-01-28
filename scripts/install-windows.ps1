@@ -9,7 +9,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
 $StartMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
 $ShortcutPath = "$StartMenuPath\$AppName.lnk"
-$IconPath = "$ProjectDir\src\soupawhisper\gui\assets\microphone.png"
+$IconPath = "$ProjectDir\data\icons\soupawhisper.png"
 
 Write-Host "Installing $AppName shortcut..."
 
@@ -31,7 +31,7 @@ if (-not (Test-Path $UvPath)) {
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = $UvPath
-$Shortcut.Arguments = "run soupawhisper --gui"
+$Shortcut.Arguments = "run soupawhisper"
 $Shortcut.WorkingDirectory = $ProjectDir
 $Shortcut.Description = "Voice dictation tool using Groq Whisper API"
 

@@ -7,7 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DEBUG_DIR = Path.home() / ".cache" / "soupawhisper" / "debug"
+from soupawhisper.constants import DEBUG_DIR, ensure_dir
+
 MAX_RECORDINGS = 3
 
 
@@ -39,7 +40,7 @@ class DebugStorage:
 
     def __init__(self, debug_dir: Path = DEBUG_DIR):
         self.debug_dir = debug_dir
-        self.debug_dir.mkdir(parents=True, exist_ok=True)
+        ensure_dir(self.debug_dir)
 
     def save(
         self,
@@ -59,8 +60,7 @@ class DebugStorage:
         """
         # Create timestamped directory (with microseconds for uniqueness)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        record_dir = self.debug_dir / timestamp
-        record_dir.mkdir(parents=True, exist_ok=True)
+        record_dir = ensure_dir(self.debug_dir / timestamp)
 
         # Copy audio file
         audio_dest = record_dir / "audio.wav"

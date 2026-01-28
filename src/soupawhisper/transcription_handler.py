@@ -72,9 +72,16 @@ class TranscriptionHandler:
             return None
 
     def _transcribe(self, ctx: TranscriptionContext) -> TranscriptionResult:
-        """Call the transcription provider."""
-        provider = get_provider(ctx.config.active_provider)
-        return provider.transcribe(str(ctx.audio_path), ctx.config.language)
+        """Call the transcription provider.
+
+        Note: Re-reads config from disk to pick up changes made in UI.
+        """
+        from soupawhisper.config import Config
+
+        # Re-read config to get latest provider settings from UI
+        fresh_config = Config.load()
+        provider = get_provider(fresh_config.active_provider)
+        return provider.transcribe(str(ctx.audio_path), fresh_config.language)
 
     def _process_result(self, ctx: TranscriptionContext, result: TranscriptionResult) -> None:
         """Process successful transcription result."""

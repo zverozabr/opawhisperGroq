@@ -220,6 +220,8 @@ class TestSettingsScreenFromRegistry:
         mock_config.typing_delay = 12
         mock_config.debug = False
         mock_config.notifications = True
+        mock_config.cloud_provider = "groq"
+        mock_config.local_backend = "mlx"
 
         class TestApp(App):
             def compose(self) -> ComposeResult:
@@ -265,6 +267,8 @@ class TestSettingsScreenFromRegistry:
             mock_config.debug = False
             mock_config.notifications = True
             mock_config.test_new_setting = False
+            mock_config.cloud_provider = "groq"
+            mock_config.local_backend = "mlx"
 
             class TestApp(App):
                 def compose(self) -> ComposeResult:
