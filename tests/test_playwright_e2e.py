@@ -21,44 +21,94 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def app_server():
-    """Start Flet app in web mode and return the URL."""
+    """Start Flet app in ASGI web mode and return the URL.
+
+    Uses uvicorn for persistent server (doesn't close after first connection).
+    Works on both macOS and Linux.
+    """
     import socket
+    import sys
 
     # Find free port
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         port = s.getsockname()[1]
 
-    # Create a simple web server script
+    # Create ASGI web server script (persistent, doesn't close after first request)
     script = f'''
-import flet as ft
 import sys
 sys.path.insert(0, "src")
 
-from soupawhisper.gui.app import GUIApp
+import uvicorn
+import flet as ft
 
-def main(page: ft.Page):
-    app = GUIApp()
-    app.main(page)
+from soupawhisper.config import Config
+from soupawhisper.storage import HistoryStorage
+from soupawhisper.gui.history_tab import HistoryTab
+from soupawhisper.gui.settings_tab import SettingsTab
 
-ft.app(target=main, view=ft.AppView.WEB_BROWSER, port={port})
+
+class TestGUIApp:
+    """Simplified GUI app for testing (no tray, no worker)."""
+
+    def __init__(self):
+        self.config = Config.load()
+        self.history = HistoryStorage()
+        self.page = None
+
+    def main(self, page: ft.Page) -> None:
+        self.page = page
+        page.title = "SoupaWhisper"
+        page.theme_mode = ft.ThemeMode.DARK
+
+        history_tab = HistoryTab(
+            history=self.history,
+            on_copy=lambda t: None,
+            history_days=self.config.history_days,
+        )
+        settings_tab = SettingsTab(
+            config=self.config,
+            on_save=lambda f, v: None,
+        )
+
+        tab_content = ft.Container(content=history_tab, expand=True)
+
+        def switch_tab(idx):
+            tab_content.content = history_tab if idx == 0 else settings_tab
+            page.update()
+
+        page.add(
+            ft.Column([
+                ft.Row([
+                    ft.TextButton("History", on_click=lambda _: switch_tab(0)),
+                    ft.TextButton("Settings", on_click=lambda _: switch_tab(1)),
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Divider(height=1),
+                tab_content,
+            ], expand=True, spacing=0)
+        )
+
+
+app = TestGUIApp()
+asgi_app = ft.run(main=app.main, export_asgi_app=True)
+uvicorn.run(asgi_app, host="127.0.0.1", port={port}, log_level="warning")
 '''
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(script)
         script_path = f.name
 
-    # Start the server
+    # Start the server using the same Python interpreter (works on all platforms)
     proc = subprocess.Popen(
-        ["uv", "run", "python", script_path],
+        [sys.executable, script_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=str(Path(__file__).parent.parent),
         env={**os.environ, "FLET_WEB_APP": "true"},
     )
 
-    # Wait for server to start
-    for _ in range(20):
+    # Wait for server to start (longer timeout for ASGI startup)
+    for _ in range(30):
         time.sleep(0.5)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -70,7 +120,7 @@ ft.app(target=main, view=ft.AppView.WEB_BROWSER, port={port})
     else:
         proc.terminate()
         os.unlink(script_path)
-        pytest.skip("Could not start Flet web server")
+        pytest.skip("Could not start Flet ASGI web server")
 
     yield f"http://localhost:{port}"
 
@@ -84,21 +134,29 @@ ft.app(target=main, view=ft.AppView.WEB_BROWSER, port={port})
 
 @pytest.fixture(scope="module")
 def browser_context(playwright):
-    """Create browser context using system Chrome or Firefox."""
+    """Create browser context using Playwright's bundled Chromium or system browser."""
     browser = None
 
-    chrome_paths = [
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome",
-        "/usr/bin/chromium",
-    ]
-    for path in chrome_paths:
-        if os.path.exists(path):
-            browser = playwright.chromium.launch(
-                headless=True,
-                executable_path=path,
-            )
-            break
+    # First try Playwright's bundled Chromium (works on all platforms)
+    try:
+        browser = playwright.chromium.launch(headless=True)
+    except Exception:
+        pass
+
+    # Fallback to system browsers (Linux)
+    if browser is None:
+        chrome_paths = [
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
+        ]
+        for path in chrome_paths:
+            if os.path.exists(path):
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    executable_path=path,
+                )
+                break
 
     if browser is None and os.path.exists("/usr/bin/firefox"):
         browser = playwright.firefox.launch(
@@ -107,7 +165,7 @@ def browser_context(playwright):
         )
 
     if browser is None:
-        pytest.skip("No system browser found")
+        pytest.skip("No browser found. Run: playwright install chromium")
 
     context = browser.new_context()
     yield context

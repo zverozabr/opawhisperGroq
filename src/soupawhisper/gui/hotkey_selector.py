@@ -3,6 +3,7 @@
 Single Responsibility: Manage hotkey selection dialog and state.
 """
 
+import sys
 from typing import Callable
 
 import flet as ft
@@ -12,21 +13,40 @@ from .hotkey import (
     MODIFIER_KEYS,
     format_hotkey,
     format_hotkey_display,
+    get_modifier_display,
     parse_hotkey,
 )
 from .keyboard import VirtualKeyboard
 
 
-# Dropdown options for modifiers
-MODIFIER_OPTIONS = [
-    ft.dropdown.Option(key="", text="(none)"),
-    ft.dropdown.Option(key="ctrl_l", text="Left Ctrl"),
-    ft.dropdown.Option(key="ctrl_r", text="Right Ctrl"),
-    ft.dropdown.Option(key="alt_l", text="Left Alt"),
-    ft.dropdown.Option(key="alt_r", text="Right Alt"),
-    ft.dropdown.Option(key="super_l", text="Left Super"),
-    ft.dropdown.Option(key="super_r", text="Right Super"),
-]
+def _build_modifier_options() -> list[ft.dropdown.Option]:
+    """Build platform-specific modifier dropdown options.
+
+    On macOS uses Command/Option/Control with symbols.
+    On Windows/Linux uses Ctrl/Alt/Super.
+    """
+    if sys.platform == "darwin":
+        return [
+            ft.dropdown.Option(key="", text="(none)"),
+            ft.dropdown.Option(key="ctrl_l", text="⌃ Control"),
+            ft.dropdown.Option(key="super_l", text="⌘ Command"),
+            ft.dropdown.Option(key="super_r", text="⌘ Command (Right)"),
+            ft.dropdown.Option(key="alt_l", text="⌥ Option"),
+            ft.dropdown.Option(key="alt_r", text="⌥ Option (Right)"),
+        ]
+    return [
+        ft.dropdown.Option(key="", text="(none)"),
+        ft.dropdown.Option(key="ctrl_l", text="Left Ctrl"),
+        ft.dropdown.Option(key="ctrl_r", text="Right Ctrl"),
+        ft.dropdown.Option(key="alt_l", text="Left Alt"),
+        ft.dropdown.Option(key="alt_r", text="Right Alt"),
+        ft.dropdown.Option(key="super_l", text="Left Super"),
+        ft.dropdown.Option(key="super_r", text="Right Super"),
+    ]
+
+
+# Build options at import time for current platform
+MODIFIER_OPTIONS = _build_modifier_options()
 
 
 def _build_key_options() -> list[ft.dropdown.Option]:
@@ -182,6 +202,11 @@ class HotkeySelector(ft.Row):
 
         # Resize window if needed
         self._expand_window()
+
+        # Add keyboard event handler for physical key capture
+        self._old_keyboard_handler = self.page.on_keyboard_event
+        self.page.on_keyboard_event = self._on_physical_key
+
         self.page.show_dialog(self._dialog)
 
     def _parse_current_value(self) -> tuple[str | None, str | None]:
@@ -209,6 +234,23 @@ class HotkeySelector(ft.Row):
             needs_update = True
         if needs_update:
             self.page.update()
+
+    def _on_physical_key(self, e: ft.KeyboardEvent) -> None:
+        """Handle physical keyboard input when dialog is open.
+
+        Uses handle_physical_key_with_modifiers to work around Flutter bug #148936
+        on macOS where Right Control doesn't return a key name.
+        """
+        if self._keyboard and self._dialog and self._dialog.open:
+            # Use method with modifier flags for macOS Right Control workaround
+            self._keyboard.handle_physical_key_with_modifiers(
+                key=e.key,
+                ctrl=e.ctrl,
+                alt=e.alt,
+                shift=e.shift,
+                meta=e.meta,
+            )
+            self._safe_update(self._keyboard)
 
     def _on_keyboard_change(self, value: str | None) -> None:
         """Sync dropdowns from keyboard."""
@@ -283,6 +325,10 @@ class HotkeySelector(ft.Row):
     def _close_dialog(self) -> None:
         """Close dialog and restore window."""
         if self._dialog and self.page:
+            # Restore old keyboard handler
+            if hasattr(self, "_old_keyboard_handler"):
+                self.page.on_keyboard_event = self._old_keyboard_handler
+
             self._dialog.open = False
             self.page.update()
             self._restore_window()

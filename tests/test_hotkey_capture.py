@@ -176,6 +176,207 @@ class TestPynputKeyMapping:
 
         keys = get_pynput_keys("ctrl_r")
         assert keys == [keyboard.Key.ctrl_r]
-        
+
         keys = get_pynput_keys("f9")
         assert keys == [keyboard.Key.f9]
+
+
+class TestVirtualKeyboardPhysicalInput:
+    """Tests for physical keyboard input in VirtualKeyboard (TDD)."""
+
+    def test_handle_physical_key_f12(self):
+        """Physical F12 press should update selection."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        selected = []
+        kb = VirtualKeyboard(on_change=lambda v: selected.append(v))
+
+        # Simulate physical F12 press
+        kb.handle_physical_key("F12")
+
+        assert kb.selected == "f12"
+        assert "f12" in selected
+
+    def test_handle_physical_key_modifier(self):
+        """Physical modifier key should update selection."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        # Simulate physical Right Ctrl press
+        kb.handle_physical_key("Control Right")
+
+        assert kb._modifier == "ctrl_r"
+
+    def test_handle_physical_key_super_r(self):
+        """Physical Right Super/Meta should update selection."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        # Simulate physical Right Meta/Super press
+        kb.handle_physical_key("Meta Right")
+
+        assert kb._modifier == "super_r"
+        assert kb.selected == "super_r"
+
+    def test_handle_physical_key_combo(self):
+        """Physical key combo should work."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        # First press modifier
+        kb.handle_physical_key("Control Left")
+        assert kb._modifier == "ctrl_l"
+
+        # Then press letter
+        kb.handle_physical_key("G")
+        assert kb._key == "g"
+        assert kb.selected == "ctrl_l+g"
+
+    def test_normalize_key_name_function_keys(self):
+        """Test key name normalization for function keys."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        # Function keys should normalize to lowercase
+        assert kb._normalize_key_name("F1") == "f1"
+        assert kb._normalize_key_name("F12") == "f12"
+
+    def test_normalize_key_name_modifiers(self):
+        """Test key name normalization for modifiers."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        assert kb._normalize_key_name("Control Left") == "ctrl_l"
+        assert kb._normalize_key_name("Control Right") == "ctrl_r"
+        assert kb._normalize_key_name("Alt Left") == "alt_l"
+        assert kb._normalize_key_name("Alt Right") == "alt_r"
+        assert kb._normalize_key_name("Meta Left") == "super_l"
+        assert kb._normalize_key_name("Meta Right") == "super_r"
+
+    def test_normalize_key_name_letters(self):
+        """Test key name normalization for letters."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        assert kb._normalize_key_name("A") == "a"
+        assert kb._normalize_key_name("Z") == "z"
+
+    def test_handle_physical_key_unknown(self):
+        """Unknown key should not crash."""
+        from soupawhisper.gui.keyboard import VirtualKeyboard
+
+        kb = VirtualKeyboard()
+
+        # Should not raise
+        kb.handle_physical_key("Unknown Key 123")
+        assert kb.selected is None
+
+
+class TestPlatformAwareKeyNames:
+    """Tests for platform-specific modifier key names (TDD)."""
+
+    def test_get_modifier_display_macos_symbol(self):
+        """On macOS, get_modifier_display returns symbols by default."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_modifier_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "darwin"):
+            assert get_modifier_display("super_l") == "⌘"
+            assert get_modifier_display("super_r") == "⌘"
+            assert get_modifier_display("alt_l") == "⌥"
+            assert get_modifier_display("alt_r") == "⌥"
+            assert get_modifier_display("ctrl_l") == "⌃"
+            assert get_modifier_display("shift_l") == "⇧"
+
+    def test_get_modifier_display_macos_name(self):
+        """On macOS, get_modifier_display returns full names when requested."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_modifier_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "darwin"):
+            assert get_modifier_display("super_l", use_symbol=False) == "Command"
+            assert get_modifier_display("super_r", use_symbol=False) == "Command"
+            assert get_modifier_display("alt_l", use_symbol=False) == "Option"
+            assert get_modifier_display("alt_r", use_symbol=False) == "Option"
+            assert get_modifier_display("ctrl_l", use_symbol=False) == "Control"
+
+    def test_get_modifier_display_linux(self):
+        """On Linux, get_modifier_display returns standard names."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_modifier_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "linux"):
+            assert get_modifier_display("super_l") == "Left Super"
+            assert get_modifier_display("super_r") == "Right Super"
+            assert get_modifier_display("alt_l") == "Left Alt"
+            assert get_modifier_display("ctrl_r") == "Right Ctrl"
+
+    def test_get_modifier_display_windows(self):
+        """On Windows, get_modifier_display returns standard names."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_modifier_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "win32"):
+            assert get_modifier_display("super_l") == "Left Super"
+            assert get_modifier_display("alt_r") == "Right Alt"
+
+    def test_format_hotkey_display_macos(self):
+        """format_hotkey_display uses platform names on macOS."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import format_hotkey_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "darwin"):
+            # Single modifier
+            assert "Command" in format_hotkey_display("super_r")
+            # Combo
+            display = format_hotkey_display("super_l+g")
+            assert "Command" in display
+            assert "G" in display
+
+    def test_format_hotkey_display_linux(self):
+        """format_hotkey_display uses standard names on Linux."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import format_hotkey_display
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "linux"):
+            assert "Super" in format_hotkey_display("super_r")
+            display = format_hotkey_display("alt_l+f9")
+            assert "Alt" in display
+
+    def test_get_keyboard_layout_macos(self):
+        """get_keyboard_layout returns macOS layout on darwin."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_keyboard_layout
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "darwin"):
+            layout = get_keyboard_layout()
+            # Find modifier row and check for symbols
+            modifier_row = layout[-2]  # Second to last row has modifiers
+            labels = [item[1] for item in modifier_row]
+            assert "⌘" in labels or any("⌘" in l for l in labels)
+
+    def test_get_keyboard_layout_linux(self):
+        """get_keyboard_layout returns default layout on Linux."""
+        from unittest.mock import patch
+
+        from soupawhisper.gui.hotkey import get_keyboard_layout
+
+        with patch("soupawhisper.gui.hotkey.sys.platform", "linux"):
+            layout = get_keyboard_layout()
+            modifier_row = layout[-2]
+            labels = [item[1] for item in modifier_row]
+            # Should have text labels, not symbols
+            assert any("Ctrl" in l or "Super" in l or "Alt" in l for l in labels)

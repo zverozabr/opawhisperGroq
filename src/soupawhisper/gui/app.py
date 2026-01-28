@@ -6,6 +6,7 @@ SOLID principles applied:
 """
 
 import atexit
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -64,6 +65,8 @@ class GUIApp:
         """
         try:
             self.page = page
+            self._preload_audio_devices()  # Cache audio devices for fast recording start
+            self._log_permissions()  # Log permission status at startup
             self._setup_page()
             self._setup_tabs()
             self.page.update()  # Render UI before starting worker
@@ -72,6 +75,22 @@ class GUIApp:
             log.error(f"GUI init error: {e}")
             import traceback
             traceback.print_exc()
+
+    def _preload_audio_devices(self) -> None:
+        """Preload audio device cache for fast recording start."""
+        from soupawhisper.audio import DeviceResolver
+
+        DeviceResolver.refresh_cache()
+        log.debug("Audio device cache refresh started")
+
+    def _log_permissions(self) -> None:
+        """Log macOS permission status at startup."""
+        if sys.platform != "darwin":
+            return
+
+        from soupawhisper.backend.darwin import PermissionsHelper
+
+        PermissionsHelper.log_status()
 
     def _setup_page(self) -> None:
         """Configure page settings."""
@@ -136,13 +155,114 @@ class GUIApp:
             alignment=ft.MainAxisAlignment.CENTER,
         )
 
+        # Permission status indicator (macOS only)
+        permission_status = self._build_permission_status()
+        self._permission_status_container = ft.Container(
+            content=permission_status.content if hasattr(permission_status, "content") else permission_status,
+            bgcolor=permission_status.bgcolor if hasattr(permission_status, "bgcolor") else None,
+            padding=permission_status.padding if hasattr(permission_status, "padding") else None,
+        )
+
         self.page.add(
             ft.Column([
                 ft.Container(tab_bar, padding=8),
+                self._permission_status_container,
                 ft.Divider(height=1),
                 self._tab_content,
             ], expand=True, spacing=0)
         )
+
+    def _build_permission_status(self) -> ft.Control:
+        """Build macOS permission status indicator.
+
+        Uses PermissionsHelper (DRY) to check both Input Monitoring and Accessibility.
+        """
+        if sys.platform != "darwin":
+            return ft.Container()
+
+        from soupawhisper.backend.darwin import PermissionsHelper
+
+        status = PermissionsHelper.check()
+
+        if status.all_granted:
+            return ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.CHECK_CIRCLE, color="green", size=14),
+                    ft.Text("Permissions OK", size=12, color="green"),
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+                padding=4,
+            )
+        else:
+            missing_text = ", ".join(status.missing)
+
+            def open_settings(e):
+                from soupawhisper.backend.darwin import open_accessibility_settings
+                from soupawhisper.clipboard import copy_to_clipboard
+
+                # Copy Python path to clipboard
+                python_path = PermissionsHelper.get_python_path()
+                copy_to_clipboard(python_path)
+
+                # Open System Settings
+                open_accessibility_settings()
+
+                # Show instruction snackbar
+                if self.page:
+                    snack = ft.SnackBar(
+                        content=ft.Text(
+                            "Path copied! Click '+' → Cmd+Shift+G → Cmd+V → Go → Open",
+                            color="white",
+                        ),
+                        bgcolor="orange",
+                        duration=8000,
+                        open=True,
+                    )
+                    self.page.overlay.append(snack)
+                    self.page.update()
+
+            def refresh_status(e):
+                self._refresh_permission_status()
+
+            return ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.WARNING, color="red", size=14),
+                    ft.Text(f"Missing: {missing_text}", size=11, color="red"),
+                    ft.TextButton(
+                        "Fix",
+                        style=ft.ButtonStyle(color="orange"),
+                        on_click=open_settings,
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.REFRESH,
+                        icon_size=16,
+                        tooltip="Check permissions again",
+                        on_click=refresh_status,
+                    ),
+                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
+                padding=4,
+                bgcolor="#330000",
+            )
+
+    def _refresh_permission_status(self) -> None:
+        """Refresh permission status indicator."""
+        if sys.platform != "darwin" or not self.page:
+            return
+
+        # Rebuild status indicator
+        new_status = self._build_permission_status()
+
+        # Find and replace in page
+        if hasattr(self, "_permission_status_container"):
+            self._permission_status_container.content = new_status.content
+            self._permission_status_container.bgcolor = new_status.bgcolor
+            self.page.update()
+
+            # If permissions OK now, restart worker
+            from soupawhisper.backend.darwin import PermissionsHelper
+            status = PermissionsHelper.check()
+            if status.all_granted:
+                log.info("All permissions granted - restarting worker")
+                self._restart_worker()
 
     def _switch_tab(self, index: int) -> None:
         """Switch to specified tab."""
@@ -178,7 +298,10 @@ class GUIApp:
         Args:
             is_recording: True if recording started, False if stopped
         """
-        pass  # Status indicator removed (was tray icon)
+        if self.page:
+            # Show/hide badge on Dock icon
+            self.page.window.badge_label = "REC" if is_recording else ""
+            self.page.update()
 
     def _on_transcribing(self, is_transcribing: bool) -> None:
         """Called when transcription state changes.
@@ -186,7 +309,9 @@ class GUIApp:
         Args:
             is_transcribing: True if transcription started, False if completed
         """
-        pass  # Status indicator removed (was tray icon)
+        # Indicator already hidden when recording stopped
+        # No additional indicator for transcribing (KISS)
+        pass
 
     def _on_transcription(self, text: str, language: str) -> None:
         """Called when transcription completes (from background thread).
@@ -237,6 +362,12 @@ class GUIApp:
         # Update config
         setattr(self.config, field_name, value)
         self.config.save(CONFIG_PATH)
+
+        # Restart worker if hotkey, backend, or audio settings changed
+        if field_name in ("hotkey", "backend", "typing_delay", "audio_device") and self._worker:
+            log.info(f"Restarting worker due to {field_name} change")
+            self._worker.stop()
+            self._start_worker()
 
         # Update history tab if history_days changed
         if field_name == "history_days" and self.history_tab:

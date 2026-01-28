@@ -734,3 +734,178 @@ class TestFullTranscriptionFlow:
         app._save_field("history_days", 7)
 
         assert history_tab.history_days == 7
+
+    def test_hotkey_change_restarts_worker(self, tmp_path, monkeypatch):
+        """Test that changing hotkey restarts the worker."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.worker import WorkerManager
+        import soupawhisper.gui.app as app_module
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_hotkey.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(app_module, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.history_tab = None
+
+        # Create mock worker
+        stop_called = []
+        start_worker_called = []
+
+        mock_worker = MagicMock(spec=WorkerManager)
+        mock_worker.stop = lambda: stop_called.append(True)
+        app._worker = mock_worker
+
+        # Mock _start_worker
+        app._start_worker = lambda: start_worker_called.append(True)
+
+        # Change hotkey
+        app._save_field("hotkey", "f12")
+
+        # Verify worker was restarted
+        assert len(stop_called) == 1, "Worker.stop() should be called"
+        assert len(start_worker_called) == 1, "_start_worker() should be called"
+        assert app.config.hotkey == "f12"
+
+    def test_backend_change_restarts_worker(self, tmp_path, monkeypatch):
+        """Test that changing backend restarts the worker."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.worker import WorkerManager
+        import soupawhisper.gui.app as app_module
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_backend.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(app_module, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.history_tab = None
+
+        # Create mock worker
+        stop_called = []
+        start_worker_called = []
+
+        mock_worker = MagicMock(spec=WorkerManager)
+        mock_worker.stop = lambda: stop_called.append(True)
+        app._worker = mock_worker
+
+        app._start_worker = lambda: start_worker_called.append(True)
+
+        # Change backend
+        app._save_field("backend", "darwin")
+
+        # Verify worker was restarted
+        assert len(stop_called) == 1
+        assert len(start_worker_called) == 1
+
+    def test_typing_delay_change_restarts_worker(self, tmp_path, monkeypatch):
+        """Test that changing typing_delay restarts the worker."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.worker import WorkerManager
+        import soupawhisper.gui.app as app_module
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_delay.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(app_module, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.history_tab = None
+
+        # Create mock worker
+        stop_called = []
+        start_worker_called = []
+
+        mock_worker = MagicMock(spec=WorkerManager)
+        mock_worker.stop = lambda: stop_called.append(True)
+        app._worker = mock_worker
+
+        app._start_worker = lambda: start_worker_called.append(True)
+
+        # Change typing_delay
+        app._save_field("typing_delay", 25)
+
+        # Verify worker was restarted
+        assert len(stop_called) == 1
+        assert len(start_worker_called) == 1
+
+    def test_audio_device_change_restarts_worker(self, tmp_path, monkeypatch):
+        """Test that changing audio_device restarts the worker."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.worker import WorkerManager
+        import soupawhisper.gui.app as app_module
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_audio.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(app_module, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.history_tab = None
+
+        # Create mock worker
+        stop_called = []
+        start_worker_called = []
+
+        mock_worker = MagicMock(spec=WorkerManager)
+        mock_worker.stop = lambda: stop_called.append(True)
+        app._worker = mock_worker
+
+        app._start_worker = lambda: start_worker_called.append(True)
+
+        # Change audio_device
+        app._save_field("audio_device", "1")
+
+        # Verify worker was restarted
+        assert len(stop_called) == 1
+        assert len(start_worker_called) == 1
+
+    def test_non_worker_field_doesnt_restart(self, tmp_path, monkeypatch):
+        """Test that changing non-worker fields doesn't restart worker."""
+        from soupawhisper.gui.app import GUIApp
+        from soupawhisper.gui.worker import WorkerManager
+        import soupawhisper.gui.app as app_module
+
+        config_path = tmp_path / "config.ini"
+        history_path = tmp_path / "history_nonworker.md"
+        monkeypatch.setattr("soupawhisper.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr(app_module, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(
+            "soupawhisper.gui.app.HistoryStorage",
+            lambda: HistoryStorage(history_path),
+        )
+
+        app = GUIApp()
+        app.history_tab = None
+
+        # Create mock worker
+        stop_called = []
+
+        mock_worker = MagicMock(spec=WorkerManager)
+        mock_worker.stop = lambda: stop_called.append(True)
+        app._worker = mock_worker
+
+        # Change language (should NOT restart worker)
+        app._save_field("language", "ru")
+        assert len(stop_called) == 0
+
+        # Change api_key (should NOT restart worker)
+        app._save_field("api_key", "new_key")
+        assert len(stop_called) == 0

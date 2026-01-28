@@ -1,5 +1,6 @@
 """Settings tab component with inline field saving."""
 
+import sys
 from typing import Callable
 
 import flet as ft
@@ -103,12 +104,13 @@ class SettingsTab(ft.Column):
             on_save=lambda v: self._save_field("hotkey", v),
         )
 
-        # Audio device dropdown
+        # Audio device dropdown (refreshes on focus to detect newly connected devices)
         devices = self._get_audio_devices()
         device_dropdown = ft.Dropdown(
             label="Microphone",
             value=self.config.audio_device,
             options=[ft.dropdown.Option(key=d[0], text=d[1]) for d in devices],
+            on_focus=self._refresh_audio_devices,
         )
         self.device_editable = EditableField(
             field=device_dropdown,
@@ -240,6 +242,7 @@ class SettingsTab(ft.Column):
                         SettingsSection("System", [
                             self.notifications_editable,
                             self.backend_editable,
+                            self._build_permissions_button(),
                         ]),
                         ft.Divider(),
                         SettingsSection("Developer", [self.debug_editable]),
@@ -252,6 +255,124 @@ class SettingsTab(ft.Column):
 
         return self
 
+    def _build_permissions_button(self) -> ft.Control:
+        """Build macOS permissions button (only visible on macOS)."""
+        if sys.platform != "darwin":
+            return ft.Container()  # Empty on non-macOS
+
+        def open_permissions(e):
+            from soupawhisper.backend.darwin import (
+                PermissionsHelper,
+                check_accessibility,
+            )
+            from soupawhisper.clipboard import copy_to_clipboard
+
+            # Get current status and Python path using PermissionsHelper (DRY)
+            status = PermissionsHelper.check()
+            target = PermissionsHelper.get_python_path()
+            copy_to_clipboard(target)
+
+            def request_access(ev):
+                """Try to trigger system permission prompt."""
+                check_accessibility(prompt=True)
+                show_snack_on_control(self, "System prompt triggered (if not already granted)")
+
+            def open_accessibility(ev):
+                PermissionsHelper.open_accessibility_with_finder()
+
+            def open_input_mon(ev):
+                PermissionsHelper.open_input_monitoring_with_finder()
+
+            def close_dlg(ev):
+                dlg.open = False
+                if self.page:
+                    self.page.update()
+
+            def restart_app(ev):
+                """Restart the application."""
+                import os
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+            # Build status text showing current permissions
+            status_color = "green" if status.all_granted else "orange"
+            status_text = "All OK" if status.all_granted else f"Missing: {', '.join(status.missing)}"
+
+            dlg = ft.AlertDialog(
+                modal=False,
+                title=ft.Text("macOS Permissions Setup"),
+                content=ft.Column([
+                    ft.Row([
+                        ft.Text("Status: ", size=12),
+                        ft.Text(status_text, size=12, color=status_color, weight=ft.FontWeight.BOLD),
+                    ]),
+                    ft.Text("Path copied to clipboard!", color="green", size=12),
+                    ft.Container(
+                        content=ft.Text(target, size=11, selectable=True),
+                        bgcolor="#333333",
+                        padding=10,
+                        border_radius=4,
+                    ),
+                    ft.Divider(),
+                    ft.Text("Steps for each:", weight=ft.FontWeight.BOLD),
+                    ft.Text("1. Click '+' at bottom of list"),
+                    ft.Text("2. Press Cmd+Shift+G"),
+                    ft.Text("3. Paste (Cmd+V) → Go → Open"),
+                    ft.Text("4. Enable toggle"),
+                    ft.Divider(),
+                    ft.Button(
+                        "Request Access (System Prompt)",
+                        icon=ft.Icons.VERIFIED_USER,
+                        on_click=request_access,
+                        bgcolor="blue",
+                        color="white",
+                    ),
+                    ft.Text("If prompt doesn't add app, use buttons below:", size=11),
+                    ft.Row([
+                        ft.Button(
+                            "1. Accessibility",
+                            icon=ft.Icons.ACCESSIBILITY,
+                            on_click=open_accessibility,
+                        ),
+                        ft.Button(
+                            "2. Input Monitoring",
+                            icon=ft.Icons.KEYBOARD,
+                            on_click=open_input_mon,
+                        ),
+                    ], spacing=10),
+                    ft.Divider(),
+                    ft.Row([
+                        ft.Text("After adding to BOTH →", color="orange"),
+                        ft.Button(
+                            "Restart App",
+                            icon=ft.Icons.REFRESH,
+                            on_click=restart_app,
+                            bgcolor="orange",
+                            color="white",
+                        ),
+                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                ], tight=True, spacing=8, width=420),
+                actions=[ft.TextButton("Close", on_click=close_dlg)],
+            )
+
+            # Expand window to not overlap
+            if self.page:
+                if self.page.window.width < 500:
+                    self.page.window.width = 500
+                if self.page.window.height < 600:
+                    self.page.window.height = 600
+                self.page.overlay.append(dlg)
+                dlg.open = True
+                self.page.update()
+
+        return ft.Container(
+            content=ft.Button(
+                "Setup macOS Permissions",
+                icon=ft.Icons.SECURITY,
+                on_click=open_permissions,
+            ),
+            padding=ft.Padding.only(top=8),
+        )
+
     def _get_audio_devices(self) -> list[tuple[str, str]]:
         """Get list of available audio devices."""
         devices = [("default", "Default")]
@@ -261,6 +382,28 @@ class SettingsTab(ft.Column):
         except Exception:
             pass
         return devices
+
+    def _refresh_audio_devices(self, e) -> None:
+        """Refresh device list when dropdown receives focus.
+
+        This detects newly connected devices (e.g., Bluetooth microphones)
+        without requiring app restart.
+        """
+        devices = self._get_audio_devices()
+        dropdown = self.device_editable.field
+        current_value = dropdown.value
+
+        # Update options
+        dropdown.options = [ft.dropdown.Option(key=d[0], text=d[1]) for d in devices]
+
+        # Keep current value if still valid, otherwise reset to default
+        valid_ids = {d[0] for d in devices}
+        if current_value not in valid_ids:
+            dropdown.value = "default"
+
+        # Update UI
+        if self.page:
+            dropdown.update()
 
     def _parse_int(self, value: str, default: int) -> int:
         """Parse integer from string with fallback."""

@@ -343,19 +343,33 @@ class TestFormatHotkeyDisplay:
     """Tests for hotkey display formatting."""
 
     def test_format_single_key(self):
-        """Test formatting single key for display."""
+        """Test formatting single key for display (platform-aware)."""
+        import sys
+
         from soupawhisper.gui.components import format_hotkey_display
 
         assert format_hotkey_display("f9") == "F9"
         assert format_hotkey_display("escape") == "Escape"
-        assert format_hotkey_display("ctrl_r") == "Right Ctrl"
+
+        # Platform-specific modifier names
+        if sys.platform == "darwin":
+            assert format_hotkey_display("ctrl_r") == "Control"
+        else:
+            assert format_hotkey_display("ctrl_r") == "Right Ctrl"
 
     def test_format_combo(self):
-        """Test formatting combo for display."""
+        """Test formatting combo for display (platform-aware)."""
+        import sys
+
         from soupawhisper.gui.components import format_hotkey_display
 
-        assert format_hotkey_display("ctrl+g") == "Ctrl + G"
-        assert format_hotkey_display("alt+f9") == "Alt + F9"
+        # Platform-specific modifier names
+        if sys.platform == "darwin":
+            assert format_hotkey_display("ctrl+g") == "Control + G"
+            assert format_hotkey_display("alt+f9") == "Option + F9"
+        else:
+            assert format_hotkey_display("ctrl+g") == "Ctrl + G"
+            assert format_hotkey_display("alt+f9") == "Alt + F9"
 
     def test_format_none(self):
         """Test formatting None."""

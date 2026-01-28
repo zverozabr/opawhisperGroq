@@ -67,7 +67,7 @@ class App:
 
         self.recorder.start()
         log.info("Recording...")
-        self._notify("Recording...", "Release key when done", "audio-input-microphone", 30000)
+        # No notification - menu bar indicator shows recording status
         if self.on_recording:
             self.on_recording(True)
 

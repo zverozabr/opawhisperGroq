@@ -1,7 +1,52 @@
 """Hotkey constants and utilities.
 
 Single Responsibility: Only hotkey parsing, formatting, and constants.
+DRY: Platform detection in one place, used by all display functions.
 """
+
+import sys
+
+# macOS modifier symbols (Apple standard)
+_MACOS_MODIFIER_SYMBOLS: dict[str, str] = {
+    "ctrl": "⌃", "ctrl_l": "⌃", "ctrl_r": "⌃",
+    "alt": "⌥", "alt_l": "⌥", "alt_r": "⌥",
+    "super": "⌘", "super_l": "⌘", "super_r": "⌘",
+    "shift": "⇧", "shift_l": "⇧", "shift_r": "⇧",
+}
+
+# macOS modifier full names
+_MACOS_MODIFIER_NAMES: dict[str, str] = {
+    "ctrl": "Control", "ctrl_l": "Control", "ctrl_r": "Control",
+    "alt": "Option", "alt_l": "Option", "alt_r": "Option",
+    "super": "Command", "super_l": "Command", "super_r": "Command",
+    "shift": "Shift", "shift_l": "Shift", "shift_r": "Shift",
+}
+
+# Default modifier names (Windows/Linux)
+_DEFAULT_MODIFIER_NAMES: dict[str, str] = {
+    "ctrl": "Ctrl", "ctrl_l": "Left Ctrl", "ctrl_r": "Right Ctrl",
+    "alt": "Alt", "alt_l": "Left Alt", "alt_r": "Right Alt",
+    "super": "Super", "super_l": "Left Super", "super_r": "Right Super",
+    "shift": "Shift", "shift_l": "Left Shift", "shift_r": "Right Shift",
+}
+
+
+def get_modifier_display(key: str, use_symbol: bool = True) -> str:
+    """Get platform-specific display name for modifier key.
+
+    Args:
+        key: Modifier key name (e.g., 'ctrl_l', 'super_r')
+        use_symbol: If True, use symbol on macOS (⌘), else full name
+
+    Returns:
+        Display string for the modifier
+    """
+    if sys.platform == "darwin":
+        if use_symbol:
+            return _MACOS_MODIFIER_SYMBOLS.get(key, key)
+        return _MACOS_MODIFIER_NAMES.get(key, key)
+    return _DEFAULT_MODIFIER_NAMES.get(key, key)
+
 
 # Predefined hotkey display names
 HOTKEY_DISPLAY_NAMES: dict[str, str] = {
@@ -37,8 +82,8 @@ MODIFIER_KEYS: set[str] = {
     "super", "super_l", "super_r",
 }
 
-# Virtual keyboard layout: (key_name, display_label, width_multiplier)
-KEYBOARD_LAYOUT: list[list[tuple[str, str, float]]] = [
+# Common keyboard rows (shared between platforms)
+_COMMON_ROWS: list[list[tuple[str, str, float]]] = [
     # Row 1: Function keys
     [("escape", "Esc", 1.1), ("f1", "F1", 1), ("f2", "F2", 1), ("f3", "F3", 1), ("f4", "F4", 1),
      ("f5", "F5", 1), ("f6", "F6", 1), ("f7", "F7", 1), ("f8", "F8", 1),
@@ -59,15 +104,43 @@ KEYBOARD_LAYOUT: list[list[tuple[str, str, float]]] = [
     [("z", "Z", 1), ("x", "X", 1), ("c", "C", 1), ("v", "V", 1), ("b", "B", 1),
      ("n", "N", 1), ("m", "M", 1),
      ("left", "←", 1), ("down", "↓", 1), ("right", "→", 1), ("page_down", "PgD", 1.1)],
-    # Row 6: Modifiers and space
-    [("ctrl_l", "LCtrl", 1.4), ("super_l", "LSuper", 1.5), ("alt_l", "LAlt", 1.3),
-     ("space", "Space", 3),
-     ("alt_r", "RAlt", 1.3), ("super_r", "RSuper", 1.5), ("ctrl_r", "RCtrl", 1.4)],
-    # Row 7: Special keys
-    [("tab", "Tab", 1), ("enter", "Enter", 1.3), ("backspace", "Bksp", 1.2),
-     ("pause", "Pause", 1.2), ("scroll_lock", "ScrLk", 1.2), ("num_lock", "NumLk", 1.4),
-     ("print_screen", "PrtSc", 1.2), ("caps_lock", "Caps", 1.2)],
 ]
+
+# macOS modifier row (with symbols)
+_MACOS_MODIFIER_ROW: list[tuple[str, str, float]] = [
+    ("ctrl_l", "⌃", 1.4), ("super_l", "⌘", 1.5), ("alt_l", "⌥", 1.3),
+    ("space", "Space", 3),
+    ("alt_r", "⌥", 1.3), ("super_r", "⌘", 1.5), ("ctrl_r", "⌃", 1.4),
+]
+
+# Default modifier row (Windows/Linux)
+_DEFAULT_MODIFIER_ROW: list[tuple[str, str, float]] = [
+    ("ctrl_l", "LCtrl", 1.4), ("super_l", "LSuper", 1.5), ("alt_l", "LAlt", 1.3),
+    ("space", "Space", 3),
+    ("alt_r", "RAlt", 1.3), ("super_r", "RSuper", 1.5), ("ctrl_r", "RCtrl", 1.4),
+]
+
+# Special keys row (same for all platforms)
+_SPECIAL_KEYS_ROW: list[tuple[str, str, float]] = [
+    ("tab", "Tab", 1), ("enter", "Enter", 1.3), ("backspace", "Bksp", 1.2),
+    ("pause", "Pause", 1.2), ("scroll_lock", "ScrLk", 1.2), ("num_lock", "NumLk", 1.4),
+    ("print_screen", "PrtSc", 1.2), ("caps_lock", "Caps", 1.2),
+]
+
+
+def get_keyboard_layout() -> list[list[tuple[str, str, float]]]:
+    """Get platform-specific keyboard layout.
+
+    Returns:
+        Keyboard layout with platform-appropriate modifier labels.
+    """
+    modifier_row = _MACOS_MODIFIER_ROW if sys.platform == "darwin" else _DEFAULT_MODIFIER_ROW
+    return [*_COMMON_ROWS, modifier_row, _SPECIAL_KEYS_ROW]
+
+
+# Legacy: Keep KEYBOARD_LAYOUT for backward compatibility
+# New code should use get_keyboard_layout()
+KEYBOARD_LAYOUT = get_keyboard_layout()
 
 
 def parse_hotkey(hotkey: str) -> tuple[str | None, str | None]:
@@ -102,18 +175,28 @@ def format_hotkey(modifier: str | None, key: str | None) -> str | None:
 
 
 def format_hotkey_display(hotkey: str | None) -> str:
-    """Format hotkey for user-friendly display.
+    """Format hotkey for user-friendly display (platform-aware).
+
+    On macOS uses Command/Option/Control names.
+    On Windows/Linux uses Ctrl/Alt/Super names.
 
     Examples:
-        'ctrl+g' -> 'Ctrl + G'
+        'ctrl+g' -> 'Ctrl + G' (Linux) or 'Control + G' (macOS)
+        'super_r' -> 'Right Super' (Linux) or 'Command' (macOS)
         'f9' -> 'F9'
         None -> 'Not set'
     """
     if hotkey is None:
         return "Not set"
+
     if "+" in hotkey:
         mod, key = hotkey.split("+", 1)
-        mod_display = HOTKEY_DISPLAY_NAMES.get(mod, mod.title())
+        mod_display = get_modifier_display(mod, use_symbol=False)
         key_display = HOTKEY_DISPLAY_NAMES.get(key, key.upper())
         return f"{mod_display} + {key_display}"
+
+    # Single key - check if it's a modifier
+    if hotkey in MODIFIER_KEYS:
+        return get_modifier_display(hotkey, use_symbol=False)
+
     return HOTKEY_DISPLAY_NAMES.get(hotkey, hotkey.replace("_", " ").title())

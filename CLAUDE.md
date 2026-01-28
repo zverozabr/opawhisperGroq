@@ -78,7 +78,7 @@ src/soupawhisper/
 |----------|-------|-----------|--------|---------|
 | X11 | arecord | xclip | xdotool | pynput |
 | Wayland | arecord | wl-copy | wtype/ydotool | evdev |
-| macOS | sox/rec | pbcopy | pynput | pynput |
+| macOS | ffmpeg | pbcopy | pynput | pynput |
 | Windows | ffmpeg | PowerShell | pynput | pynput |
 
 **Note:** KDE Wayland blocks virtual input — uses clipboard + manual paste

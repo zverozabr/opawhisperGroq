@@ -54,7 +54,7 @@ class TranscriptionHandler:
             Transcribed text or None if failed
         """
         log.info("Transcribing...")
-        self._notify("Transcribing...", "Sending to Groq API", "emblem-synchronizing", 30000)
+        # No notification for "Transcribing..." - menu bar indicator shows status
 
         try:
             result = self._transcribe(ctx)
@@ -63,12 +63,12 @@ class TranscriptionHandler:
                 return result.text
             else:
                 log.warning("No speech detected")
-                self._notify("No speech", "Try speaking louder", "dialog-warning", 2000)
+                # No notification for "No speech" - KISS
                 return None
 
         except TranscriptionError as e:
             log.error(f"Transcription error: {e}")
-            self._notify("Error", str(e)[:50], "dialog-error", 3000)
+            self._notify("Error", str(e)[:50], "dialog-error", 3000)  # Keep error notifications
             return None
 
     def _transcribe(self, ctx: TranscriptionContext) -> TranscriptionResult:
@@ -110,10 +110,8 @@ class TranscriptionHandler:
                 result.raw_response,
             )
 
-        # Log and notify
+        # Log result (no notification - KISS, menu bar indicator sufficient)
         log.info(f"Transcribed: {text}")
-        preview = text[:100] + ("..." if len(text) > 100 else "")
-        self._notify("Done!", preview, "emblem-ok-symbolic", 3000)
 
         # Notify callback (for GUI)
         if ctx.on_complete:

@@ -36,8 +36,10 @@ sudo usermod -aG input $USER
 
 ### macOS
 ```bash
-brew install sox
+brew install ffmpeg
 ```
+
+**Note:** Grant Accessibility permissions: System Settings → Privacy & Security → Accessibility
 
 ### Windows
 ```bash
@@ -121,7 +123,7 @@ uv run soupawhisper --gui
 |----------|-------|-----------|--------|---------|
 | X11 | arecord | xclip | xdotool | pynput |
 | Wayland | arecord | wl-copy | wtype/ydotool | evdev |
-| macOS | sox/rec | pbcopy | pynput | pynput |
+| macOS | ffmpeg | pbcopy | pynput | pynput |
 | Windows | ffmpeg | PowerShell | pynput | pynput |
 
 **KDE Wayland:** Virtual keyboard blocked by security. Text copies to clipboard only — paste with Ctrl+V.

@@ -4,7 +4,6 @@ TDD: These tests verify icon files exist and are properly configured.
 """
 
 from pathlib import Path
-import pytest
 
 
 class TestIconFiles:
@@ -87,20 +86,22 @@ class TestDesktopEntry:
         assert icon_path.exists(), f"Hicolor icon not found: {icon_path}"
 
 
-class TestNoTrayIcon:
-    """Test that tray icon is not used (removed for simplicity)."""
+class TestDockBadge:
+    """Test that Dock badge is used for recording status."""
 
-    def test_guiapp_has_no_tray_attribute(self):
-        """GUIApp should not have tray attribute (removed for KISS)."""
+    def test_on_recording_sets_badge(self):
+        """_on_recording should set page.window.badge_label."""
+        from unittest.mock import MagicMock
+
         from soupawhisper.gui.app import GUIApp
-        app = GUIApp()
-        assert not hasattr(app, 'tray') or app.tray is None, (
-            "GUIApp should not have tray icon - it was removed for simplicity"
-        )
 
-    def test_no_tray_import_in_app(self):
-        """app.py should not import TrayIcon."""
-        import soupawhisper.gui.app as app_module
-        assert not hasattr(app_module, 'TrayIcon'), (
-            "TrayIcon should not be imported in app.py"
-        )
+        app = GUIApp()
+        app.page = MagicMock()
+
+        # Recording started
+        app._on_recording(True)
+        assert app.page.window.badge_label == "REC"
+
+        # Recording stopped
+        app._on_recording(False)
+        assert app.page.window.badge_label == ""

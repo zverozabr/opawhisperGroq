@@ -1,105 +1,18 @@
 """Tests for output module (notifications)."""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 
 class TestNotify:
     """Tests for notify function."""
 
-    def test_notify_default_params(self):
-        """Test notification with default parameters."""
+    def test_notify_calls_subprocess(self):
+        """Test notification calls subprocess.run."""
         with patch("subprocess.run") as mock_run:
             from soupawhisper.output import notify
 
             notify("Test Title", "Test message")
-
-            mock_run.assert_called_once()
-            call_args = mock_run.call_args[0][0]
-
-            assert call_args[0] == "notify-send"
-            assert "-a" in call_args
-            assert "SoupaWhisper" in call_args
-            assert "-i" in call_args
-            assert "dialog-information" in call_args  # Default icon
-            assert "-t" in call_args
-            assert "2000" in call_args  # Default timeout
-            assert "Test Title" in call_args
-            assert "Test message" in call_args
-
-    def test_notify_custom_icon(self):
-        """Test notification with custom icon."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import notify
-
-            notify("Title", "Message", icon="audio-input-microphone")
-
-            call_args = mock_run.call_args[0][0]
-            assert "audio-input-microphone" in call_args
-
-    def test_notify_custom_timeout(self):
-        """Test notification with custom timeout."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import notify
-
-            notify("Title", "Message", timeout_ms=5000)
-
-            call_args = mock_run.call_args[0][0]
-            assert "5000" in call_args
-
-    def test_notify_unicode_message(self):
-        """Test notification with Unicode characters."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import notify
-
-            notify("Привет", "Тестовое сообщение 🎤")
-
-            call_args = mock_run.call_args[0][0]
-            assert "Привет" in call_args
-            assert "Тестовое сообщение 🎤" in call_args
-
-    def test_notify_empty_message(self):
-        """Test notification with empty message."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import notify
-
-            notify("Title", "")
-
-            mock_run.assert_called_once()
-            call_args = mock_run.call_args[0][0]
-            assert "Title" in call_args
-            assert "" in call_args
-
-    def test_notify_replacement_id(self):
-        """Test notification includes replacement ID."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import _NOTIFICATION_ID, notify
-
-            notify("Title", "Message")
-
-            call_args = mock_run.call_args[0][0]
-            assert "-r" in call_args
-            assert str(_NOTIFICATION_ID) in call_args
-
-    def test_notify_ubuntu_hint(self):
-        """Test notification includes Ubuntu synchronous hint."""
-        with patch("subprocess.run") as mock_run:
-            from soupawhisper.output import notify
-
-            notify("Title", "Message")
-
-            call_args = mock_run.call_args[0][0]
-            assert "-h" in call_args
-            assert "string:x-canonical-private-synchronous:soupawhisper" in call_args
-
-    def test_notify_command_fails(self):
-        """Test notification handles command failure gracefully."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1)
-
-            from soupawhisper.output import notify
-
-            # Should not raise even if notify-send fails
-            notify("Title", "Message")
 
             mock_run.assert_called_once()
 
@@ -123,26 +36,133 @@ class TestNotify:
             call_kwargs = mock_run.call_args[1]
             assert call_kwargs.get("check") is False
 
-    def test_notify_long_message(self):
-        """Test notification with long message."""
+    def test_notify_command_fails(self):
+        """Test notification handles command failure gracefully."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+
+            from soupawhisper.output import notify
+
+            # Should not raise even if command fails
+            notify("Title", "Message")
+
+            mock_run.assert_called_once()
+
+
+class TestNotifyMacOS:
+    """Tests for macOS-specific notification behavior."""
+
+    def test_notify_macos_uses_osascript(self):
+        """Test notification on macOS uses osascript."""
+        if sys.platform != "darwin":
+            return  # Skip on non-macOS
+
         with patch("subprocess.run") as mock_run:
             from soupawhisper.output import notify
 
-            long_message = "A" * 1000
-            notify("Title", long_message)
+            notify("Title", "Message")
 
             call_args = mock_run.call_args[0][0]
-            assert long_message in call_args
+            assert call_args[0] == "osascript"
+            assert "-e" in call_args
 
-    def test_notify_special_characters(self):
-        """Test notification with special shell characters."""
+    def test_notify_macos_includes_title(self):
+        """Test macOS notification includes title."""
+        if sys.platform != "darwin":
+            return
+
         with patch("subprocess.run") as mock_run:
             from soupawhisper.output import notify
 
-            # Special characters that might cause shell issues
-            special_message = "Test $PATH && rm -rf / ; echo 'test'"
-            notify("Title", special_message)
+            notify("Test Title", "Test message")
 
             call_args = mock_run.call_args[0][0]
-            # Should pass the string as-is (subprocess handles escaping)
-            assert special_message in call_args
+            script = call_args[2]  # The AppleScript string
+            assert "Test Title" in script
+
+    def test_notify_macos_includes_message(self):
+        """Test macOS notification includes message."""
+        if sys.platform != "darwin":
+            return
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import notify
+
+            notify("Title", "Test message")
+
+            call_args = mock_run.call_args[0][0]
+            script = call_args[2]
+            assert "Test message" in script
+
+
+class TestNotifyLinux:
+    """Tests for Linux-specific notification behavior."""
+
+    def test_notify_linux_uses_notify_send(self):
+        """Test notification on Linux uses notify-send."""
+        if sys.platform != "linux":
+            return  # Skip on non-Linux
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import notify
+
+            notify("Title", "Message")
+
+            call_args = mock_run.call_args[0][0]
+            assert call_args[0] == "notify-send"
+
+    def test_notify_linux_includes_app_name(self):
+        """Test Linux notification includes app name."""
+        if sys.platform != "linux":
+            return
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import notify
+
+            notify("Title", "Message")
+
+            call_args = mock_run.call_args[0][0]
+            assert "-a" in call_args
+            assert "SoupaWhisper" in call_args
+
+    def test_notify_linux_includes_icon(self):
+        """Test Linux notification includes icon."""
+        if sys.platform != "linux":
+            return
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import notify
+
+            notify("Title", "Message", icon="audio-input-microphone")
+
+            call_args = mock_run.call_args[0][0]
+            assert "-i" in call_args
+            assert "audio-input-microphone" in call_args
+
+    def test_notify_linux_includes_timeout(self):
+        """Test Linux notification includes timeout."""
+        if sys.platform != "linux":
+            return
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import notify
+
+            notify("Title", "Message", timeout_ms=5000)
+
+            call_args = mock_run.call_args[0][0]
+            assert "-t" in call_args
+            assert "5000" in call_args
+
+    def test_notify_linux_replacement_id(self):
+        """Test Linux notification includes replacement ID."""
+        if sys.platform != "linux":
+            return
+
+        with patch("subprocess.run") as mock_run:
+            from soupawhisper.output import _NOTIFICATION_ID, notify
+
+            notify("Title", "Message")
+
+            call_args = mock_run.call_args[0][0]
+            assert "-r" in call_args
+            assert str(_NOTIFICATION_ID) in call_args

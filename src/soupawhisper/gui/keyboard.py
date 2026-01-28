@@ -9,10 +9,10 @@ import flet as ft
 
 from .base import safe_control_update
 from .hotkey import (
-    KEYBOARD_LAYOUT,
     LETTER_KEYS,
     MODIFIER_KEYS,
     format_hotkey,
+    get_keyboard_layout,
     parse_hotkey,
 )
 
@@ -65,7 +65,7 @@ class VirtualKeyboard(ft.Column):
         self.spacing = 2
         self.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-        for row in KEYBOARD_LAYOUT:
+        for row in get_keyboard_layout():
             row_controls = []
             for key_name, display, width_mult in row:
                 btn = self._create_button(key_name, display, width_mult)
@@ -186,6 +186,184 @@ class VirtualKeyboard(ft.Column):
     def select(self, key_name: str) -> None:
         """Programmatically select a key (for testing)."""
         self._on_key_click(key_name)
+
+    def handle_physical_key(self, flet_key: str) -> None:
+        """Handle physical keyboard key press.
+
+        Maps Flet KeyboardEvent key names to virtual keyboard keys.
+
+        Args:
+            flet_key: Key name from Flet KeyboardEvent.key
+        """
+        normalized = self._normalize_key_name(flet_key)
+
+        if normalized and normalized in self._buttons:
+            self._on_key_click(normalized)
+
+    def handle_physical_key_with_modifiers(
+        self,
+        key: str,
+        ctrl: bool = False,
+        alt: bool = False,
+        shift: bool = False,
+        meta: bool = False,
+    ) -> None:
+        """Handle physical keyboard key press with modifier flags.
+
+        This method implements a workaround for Flutter bug #148936 on macOS,
+        where Right Control (and potentially other right-side modifiers) don't
+        return a key name, but the modifier flags are still set.
+
+        Args:
+            key: Key name from Flet KeyboardEvent.key (may be empty on macOS)
+            ctrl: Whether Control modifier is pressed
+            alt: Whether Alt/Option modifier is pressed
+            shift: Whether Shift modifier is pressed
+            meta: Whether Meta/Command modifier is pressed
+        """
+        # Try to detect modifier from flags if key is empty (macOS Flutter bug)
+        detected = self._detect_modifier_from_flags(key, ctrl, alt, shift, meta)
+        if detected:
+            if detected in self._buttons:
+                self._on_key_click(detected)
+            return
+
+        # Normal path: use the key name
+        self.handle_physical_key(key)
+
+    def _detect_modifier_from_flags(
+        self,
+        key: str,
+        ctrl: bool,
+        alt: bool,
+        shift: bool,
+        meta: bool,
+    ) -> str | None:
+        """Detect right-side modifier from flags when key name is missing.
+
+        Workaround for Flutter bug #148936 on macOS where Right Control
+        doesn't return a key name but the ctrl flag is still True.
+
+        Args:
+            key: Key name (if empty/missing, we use flags to detect)
+            ctrl, alt, shift, meta: Modifier flags
+
+        Returns:
+            Detected modifier key name or None if not applicable
+        """
+        # Only apply workaround when key name is empty/missing
+        if key and key.strip():
+            return None
+
+        # Detect based on which flag is set (priority order)
+        if ctrl:
+            return "ctrl_r"
+        if alt:
+            return "alt_r"
+        if meta:
+            return "super_r"
+        if shift:
+            return "shift_r"
+
+        return None
+
+    def _normalize_key_name(self, flet_key: str) -> str | None:
+        """Map Flet KeyboardEvent key name to our key name format.
+
+        Args:
+            flet_key: Key name from Flet (e.g., "Control Right", "F12", "A")
+
+        Returns:
+            Normalized key name or None if not mappable
+        """
+        # Mapping from Flet KeyboardEvent.key to our format
+        # Includes standard names and platform-specific aliases
+        key_map = {
+            # Modifiers - standard Flet/Flutter names
+            "Control Left": "ctrl_l",
+            "Control Right": "ctrl_r",
+            "Alt Left": "alt_l",
+            "Alt Right": "alt_r",
+            "Meta Left": "super_l",
+            "Meta Right": "super_r",
+            "Shift Left": "shift_l",
+            "Shift Right": "shift_r",
+            # Modifiers - alternate names (some platforms/keyboards)
+            "ControlLeft": "ctrl_l",
+            "ControlRight": "ctrl_r",
+            "AltLeft": "alt_l",
+            "AltRight": "alt_r",
+            "MetaLeft": "super_l",
+            "MetaRight": "super_r",
+            "ShiftLeft": "shift_l",
+            "ShiftRight": "shift_r",
+            # macOS-specific names
+            "Control": "ctrl_l",  # macOS only has left control
+            "Option Left": "alt_l",
+            "Option Right": "alt_r",
+            "Command Left": "super_l",
+            "Command Right": "super_r",
+            "Alt Graph": "alt_r",  # Some keyboards
+            # Function keys
+            "F1": "f1", "F2": "f2", "F3": "f3", "F4": "f4",
+            "F5": "f5", "F6": "f6", "F7": "f7", "F8": "f8",
+            "F9": "f9", "F10": "f10", "F11": "f11", "F12": "f12",
+            # Special keys
+            "Escape": "escape",
+            "Tab": "tab",
+            "Caps Lock": "caps_lock",
+            "CapsLock": "caps_lock",
+            "Backspace": "backspace",
+            "Enter": "enter",
+            "Return": "enter",  # macOS alternate
+            "Space": "space",
+            " ": "space",  # Space character
+            "Insert": "insert",
+            "Delete": "delete",
+            "Home": "home",
+            "End": "end",
+            "Page Up": "page_up",
+            "PageUp": "page_up",
+            "Page Down": "page_down",
+            "PageDown": "page_down",
+            "Arrow Up": "up",
+            "ArrowUp": "up",
+            "Up": "up",
+            "Arrow Down": "down",
+            "ArrowDown": "down",
+            "Down": "down",
+            "Arrow Left": "left",
+            "ArrowLeft": "left",
+            "Left": "left",
+            "Arrow Right": "right",
+            "ArrowRight": "right",
+            "Right": "right",
+            "Num Lock": "num_lock",
+            "NumLock": "num_lock",
+            "Scroll Lock": "scroll_lock",
+            "ScrollLock": "scroll_lock",
+            "Pause": "pause",
+            "Print Screen": "print_screen",
+            "PrintScreen": "print_screen",
+        }
+
+        # Check explicit mapping first
+        if flet_key in key_map:
+            return key_map[flet_key]
+
+        # Single character (letters, numbers)
+        if len(flet_key) == 1:
+            return flet_key.lower()
+
+        # Try lowercase function keys (f1-f12)
+        lower = flet_key.lower()
+        if lower.startswith("f") and lower[1:].isdigit():
+            num = int(lower[1:])
+            if 1 <= num <= 12:
+                return lower
+
+        # Unknown key
+        return None
 
     def _safe_update(self) -> None:
         """Safely update the control."""
