@@ -1,5 +1,6 @@
 """Transcription handling with proper separation of concerns."""
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -12,6 +13,40 @@ from .providers import TranscriptionError, TranscriptionResult, get_provider
 from .storage import DebugData, DebugStorage
 
 log = get_logger()
+
+
+def detect_hallucination(text: str, threshold: float = 0.7) -> bool:
+    """Detect Whisper hallucination patterns (repetitive text).
+
+    Whisper sometimes hallucinates when audio is unclear, producing
+    repetitive patterns like "well well well well..." or "Peak Peak Peak...".
+
+    Args:
+        text: Transcription text to check
+        threshold: Fraction threshold (0.7 = 70% same word triggers detection)
+
+    Returns:
+        True if text appears to be a hallucination
+    """
+    words = text.split()
+
+    # Short text is fine
+    if len(words) < 5:
+        return False
+
+    # Check for repetitive pattern
+    counter = Counter(words)
+    if not counter:
+        return False
+
+    most_common_word, count = counter.most_common(1)[0]
+
+    # If one word is more than threshold of text, likely hallucination
+    if count / len(words) > threshold:
+        log.warning(f"Hallucination detected: '{most_common_word}' repeated {count}/{len(words)} times")
+        return True
+
+    return False
 
 
 @dataclass
@@ -58,13 +93,19 @@ class TranscriptionHandler:
 
         try:
             result = self._transcribe(ctx)
-            if result.text:
-                self._process_result(ctx, result)
-                return result.text
-            else:
+            if not result.text:
                 log.warning("No speech detected")
                 # No notification for "No speech" - KISS
                 return None
+
+            # Check for hallucination (repetitive text)
+            if detect_hallucination(result.text):
+                log.warning("Transcription rejected: hallucination detected")
+                self._notify("Warning", "Unclear audio, try again", "dialog-warning", 2000)
+                return None
+
+            self._process_result(ctx, result)
+            return result.text
 
         except TranscriptionError as e:
             log.error(f"Transcription error: {e}")

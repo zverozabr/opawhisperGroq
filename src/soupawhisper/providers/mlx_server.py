@@ -90,10 +90,12 @@ def main():
                 current_model_path = model_path
 
             # Transcribe - ModelHolder inside mlx_whisper caches the model
+            # condition_on_previous_text=False prevents hallucination loops
             result = mlx_whisper.transcribe(
                 audio_path,
                 path_or_hf_repo=model_path,
                 language=None if language == "auto" else language,
+                condition_on_previous_text=False,
             )
 
             elapsed_ms = int((time.perf_counter() - start_time) * 1000)

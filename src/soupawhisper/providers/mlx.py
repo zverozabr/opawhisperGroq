@@ -179,6 +179,7 @@ class MLXProvider:
         lang_arg = "None" if language == "auto" else f'"{language}"'
 
         # Python script to run in subprocess - includes timing
+        # condition_on_previous_text=False prevents hallucination loops
         script = f'''
 import json
 import time
@@ -189,6 +190,7 @@ result = mlx_whisper.transcribe(
     "{audio_path}",
     path_or_hf_repo="{model_path}",
     language={lang_arg},
+    condition_on_previous_text=False,
 )
 load_end = time.perf_counter()
 print(json.dumps({{"text": result.get("text", ""), "transcribe_ms": int((load_end - load_start) * 1000)}}))

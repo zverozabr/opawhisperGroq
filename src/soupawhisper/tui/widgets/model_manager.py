@@ -91,7 +91,13 @@ class ModelManagerWidget(Static):
             event.stop()
 
     def _get_default_local_model(self) -> str:
-        """Get default local model from providers.json or fallback."""
+        """Get default local model from providers.json or fallback.
+        
+        Default is 'turbo' - best balance of quality and speed.
+        'base' is too small and prone to hallucinations.
+        """
+        DEFAULT_MODEL = "turbo"
+        
         try:
             from soupawhisper.providers import load_providers_config
             from soupawhisper.providers.model_names import ModelNameResolver
@@ -103,14 +109,14 @@ class ModelManagerWidget(Static):
             provider_name = f"local-{backend}"
 
             if provider_name in providers:
-                model = providers[provider_name].get("model", "base")
+                model = providers[provider_name].get("model", DEFAULT_MODEL)
                 if not model or model == "Select.BLANK":
-                    return "base"
+                    return DEFAULT_MODEL
                 return ModelNameResolver.extract_short_name(model)
 
-            return "base"
+            return DEFAULT_MODEL
         except Exception:
-            return "base"
+            return DEFAULT_MODEL
 
     def _get_local_model_options(self):
         """Get available local model options from ModelManager (multilingual only)."""

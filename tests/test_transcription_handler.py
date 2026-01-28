@@ -313,6 +313,76 @@ class TestTranscriptionHandlerNotifications:
                 assert "Error" in mock_notify.call_args[0][0]
 
 
+class TestHallucinationDetection:
+    """Test hallucination detection (repetitive text patterns)."""
+
+    def test_detects_repeated_word(self):
+        """Detect when same word is repeated many times."""
+        from soupawhisper.transcription_handler import detect_hallucination
+
+        # "well" repeated 50 times - clear hallucination
+        text = " ".join(["well"] * 50)
+        assert detect_hallucination(text) is True
+
+    def test_allows_normal_text(self):
+        """Normal text should not be flagged."""
+        from soupawhisper.transcription_handler import detect_hallucination
+
+        text = "Hello, this is a normal transcription with varied words."
+        assert detect_hallucination(text) is False
+
+    def test_allows_short_text(self):
+        """Short text (< 5 words) should not be flagged."""
+        from soupawhisper.transcription_handler import detect_hallucination
+
+        assert detect_hallucination("hello") is False
+        assert detect_hallucination("hello hello") is False
+        assert detect_hallucination("test test test test") is False
+
+    def test_detects_70_percent_threshold(self):
+        """Detect when one word is > 70% of text."""
+        from soupawhisper.transcription_handler import detect_hallucination
+
+        # 8 "well" out of 10 words = 80%
+        text = "well well well well well well well well hello world"
+        assert detect_hallucination(text) is True
+
+        # 6 "well" out of 10 words = 60% - below threshold
+        text = "well well well well well well hello world foo bar"
+        assert detect_hallucination(text) is False
+
+    def test_handles_empty_text(self):
+        """Empty text should not cause error."""
+        from soupawhisper.transcription_handler import detect_hallucination
+
+        assert detect_hallucination("") is False
+        assert detect_hallucination("   ") is False
+
+    def test_hallucination_returns_empty_result(self, mock_config, mock_backend):
+        """Hallucinated text should return None and not be typed."""
+        mock_provider = MagicMock()
+        mock_provider.transcribe.return_value = TranscriptionResult(
+            text=" ".join(["well"] * 100),  # Clear hallucination
+            raw_response={"text": " ".join(["well"] * 100)},
+        )
+
+        with patch("soupawhisper.transcription_handler.get_provider", return_value=mock_provider):
+            handler = TranscriptionHandler(mock_config)
+            ctx = TranscriptionContext(
+                audio_path=Path("/tmp/test.wav"),
+                config=mock_config,
+                backend=mock_backend,
+                debug_storage=None,
+            )
+
+            result = handler.handle(ctx)
+
+            # Should return None for hallucination
+            assert result is None
+            # Should NOT type hallucinated text
+            mock_backend.type_text.assert_not_called()
+
+
 class TestTranscriptionContext:
     """Test TranscriptionContext dataclass."""
 
